@@ -1,2 +1,5 @@
-todoist_api_token: ""
+todoist_api_token: "YOUR_TODOIST_TOKEN"
 default_project: "Events"
+label: "Event"
+
+run_every: 600 # seconds
