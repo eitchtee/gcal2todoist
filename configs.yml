@@ -6,5 +6,5 @@ label: "Event"
 keep_running: false
 run_every: 600 # seconds
 
-calendar:
+calendars:
   - "primary"
