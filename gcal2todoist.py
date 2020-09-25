@@ -153,7 +153,7 @@ def main():
 
         # Remove old entries and complete tasks
         if entry['event_id'] not in all_event_ids:
-            todoist_api.items.complete(entry.get('task_id'))
+            todoist_api.items.close(entry.get('task_id'))
             db.remove(Query().event_id == entry['event_id'])
             continue  # Skip updating as the event is over
 
