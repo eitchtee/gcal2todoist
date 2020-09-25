@@ -30,20 +30,22 @@ class Configs:
         self.label = data.get('label')
         self.keep_running = data.get('keep_running')
         self.run_every = data.get('run_every')
+        self.calendars = data.get('calendars', ['primary'])
 
         self.todoist_api = todoist.TodoistAPI(self.token)
-        self.calendar = GoogleCalendar(credentials_path=os.path.join(
-            os.path.dirname(__file__),
-            '.credentials', 'credentials.json'))
+        self.calendar = []
         self.db = TinyDB('events.json')
 
         self.project_id = None
         self.label_id = None
 
     def refresh_calendar(self):
-        self.calendar = GoogleCalendar(credentials_path=os.path.join(
-            os.path.dirname(__file__),
-            '.credentials', 'credentials.json'))
+        for calendar in self.calendars:
+            self.calendar += list(GoogleCalendar(calendar,
+                                                 credentials_path=os.path.join(
+                                                     os.path.dirname(__file__),
+                                                     '.credentials',
+                                                     'credentials.json')))
 
 
 def fetch_project_id():
