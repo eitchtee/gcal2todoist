@@ -35,7 +35,7 @@ class Configs:
 
         self.todoist_api = todoist.TodoistAPI(self.token)
         self.calendar = []
-        self.db = TinyDB('events.json')
+        self.db = TinyDB(os.path.join(os.path.dirname(__file__), 'events.json'))
 
         self.project_id = None
         self.label_id = None
