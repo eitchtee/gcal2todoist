@@ -76,6 +76,26 @@ def fetch_label_id():
     return r_label_id
 
 
+def get_due_date(event):
+    date_range = [event.start + datetime.timedelta(days=x) for x in
+                  range(0, (event.end - event.start).days)]
+
+    if len(date_range) >= 2:
+        due_date = {
+            'string': f'todo dia começando {date_range[0]} até '
+                      f'{date_range[-1]}',
+            'is_recurring': True,
+            'lang': 'pt',
+            'timezone': None}
+    else:
+        due_date = {'string': str(event.start),
+                    'is_recurring': False,
+                    'lang': 'pt',
+                    'timezone': None}
+
+    return due_date
+
+
 def add_event(event):
     api = cf.todoist_api
     task = "* 🗓️ **" + event.summary + '**'
@@ -83,10 +103,7 @@ def add_event(event):
     item = api.items.add(content=task,
                          project_id=cf.project_id,
                          labels=[cf.label_id],
-                         due={'string': str(event.start),
-                              'is_recurring': False,
-                              'lang': 'pt',
-                              'timezone': None})
+                         due=get_due_date(event))
 
     if event.location:
         new_note = api.notes.add(item_id=item['id'],
@@ -160,7 +177,8 @@ def main():
 
         # Update due dates
         if todoist_api.items.get(
-                entry['task_id'])['item']['due']['string'] != str(event.start):
+                entry['task_id'])['item']['due']['string'] != \
+                get_due_date(event)['string']:
             todoist_api.items.update(entry['task_id'],
                                      due={'string': str(event.start)})
 
