@@ -1,10 +1,11 @@
 import signal
 from time import sleep
+import datetime
+import os
 
 import todoist
 from gcsa.google_calendar import GoogleCalendar
 import yaml
-import os
 from tinydb import TinyDB, Query
 
 
