@@ -2,4 +2,6 @@ todoist_api_token: "YOUR_TODOIST_TOKEN"
 default_project: "Events"
 label: "Event"
 
+# If false, script will run only once. Else it will run every n seconds
+keep_running: false
 run_every: 600 # seconds
