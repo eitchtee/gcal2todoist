@@ -76,9 +76,13 @@ def fetch_label_id():
     return r_label_id
 
 
+def get_date_range(event):
+    return [event.start + datetime.timedelta(days=x) for x in
+            range(0, (event.end - event.start).days)]
+
+
 def get_due_date(event):
-    date_range = [event.start + datetime.timedelta(days=x) for x in
-                  range(0, (event.end - event.start).days)]
+    date_range = get_date_range(event)
 
     if len(date_range) >= 2:
         due_date = {
@@ -94,6 +98,21 @@ def get_due_date(event):
                     'timezone': None}
 
     return due_date
+
+
+def handle_recurring(task, event):
+    if task['item']['due']['is_recurring']:
+        task_date = datetime.datetime.strptime(task['item']['due']['date'],
+                                               '%Y-%m-%d')
+
+        while task_date < datetime.datetime.today():
+            if task_date >= event.end:
+                break
+
+            cf.todoist_api.items.close(task['item']['id'])
+            cf.todoist_api.commit()
+            task_date = datetime.datetime.strptime(task['item']['due']['date'],
+                                                   '%Y-%m-%d')
 
 
 def add_event(event):
@@ -145,23 +164,23 @@ def main():
 
     all_event_ids = [x.id for x in cf.calendar]
     for entry in db:
-        # Skip checking if a event occurs during multiple days as it will be
-        # handled elsewhere
-        # TO-DO: Implement this handling
-        if isinstance(entry['task_id'], list):
-            continue
+        task = todoist_api.items.get(entry['task_id'])
+        task_id = entry.get('task_id')
+        event_id = entry.get('event_id')
 
         # Remove old entries and complete tasks
         if entry['event_id'] not in all_event_ids:
-            todoist_api.items.close(entry.get('task_id'))
-            db.remove(Query().event_id == entry['event_id'])
+            todoist_api.items.complete(task_id)
+            db.remove(Query().event_id == event_id)
             continue  # Skip updating as the event is over
 
         event = [x for x in cf.calendar if
-                 x.id == entry['event_id']][0]
+                 x.id == event_id][0]
+
+        handle_recurring(task, event)
 
         # Re-add missing task_id-event
-        if not todoist_api.items.get(entry['task_id']):
+        if not task:
             items_n_notes = add_event(event)
             todoist_api.commit()
             db.insert({'event_id': items_n_notes['event_id'],
@@ -171,15 +190,13 @@ def main():
 
         # Update task_id names
         task_name = "* 🗓️ **" + event.summary + '**'
-        if todoist_api.items.get(
-                entry['task_id'])['item']['content'] != task_name:
-            todoist_api.items.update(entry['task_id'], content=task_name)
+        if task['item']['content'] != task_name:
+            todoist_api.items.update(task_id, content=task_name)
 
         # Update due dates
-        if todoist_api.items.get(
-                entry['task_id'])['item']['due']['string'] != \
-                get_due_date(event)['string']:
-            todoist_api.items.update(entry['task_id'],
+        if not task['item']['due']['is_recurring'] and \
+                task['item']['due']['string'] != get_due_date(event)['string']:
+            todoist_api.items.update(task_id,
                                      due={'string': str(event.start)})
 
         # Update and delete notes
