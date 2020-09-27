@@ -57,6 +57,7 @@ class Configs:
         self.label_id = None
 
     def refresh_calendar(self):
+        self.calendar = []
         for calendar in self.calendars:
             logger.info(f'Getting calendar: "{calendar}"')
             self.calendar += list(GoogleCalendar(calendar,
