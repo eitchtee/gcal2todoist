@@ -240,8 +240,6 @@ def main():
         task_id = entry.get('task_id')
         note_id = entry.get('note_id')
         event_id = entry.get('event_id')
-        event = [x for x in cf.calendar if
-                 x.id == event_id][0]
 
         if entry['event_id'] not in all_event_ids:
             logger.info(f'Completing non-existant event-task {task_id}')
@@ -249,6 +247,9 @@ def main():
             api.commit()
             db.remove(Query().event_id == event_id)
             continue  # Skip updating as the event is over
+
+        event = [x for x in cf.calendar if
+                 x.id == event_id][0]
 
         if clear_unattached_task(event, task_id, entry.get('due_string')):
             continue  # Skip updating as the task was deleted
