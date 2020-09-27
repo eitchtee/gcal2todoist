@@ -268,13 +268,16 @@ if __name__ == '__main__':
     if cf.keep_running:
         killer = GracefulKiller()
         while not killer.kill_now:
-            cf.refresh_calendar()
-            cf.todoist_api.sync()
+            try:
+                cf.refresh_calendar()
+                cf.todoist_api.sync()
 
-            cf.project_id = fetch_project_id()
-            cf.label_id = fetch_label_id()
+                cf.project_id = fetch_project_id()
+                cf.label_id = fetch_label_id()
 
-            main()
+                main()
+            except Exception as e:
+                logger.error(e, exc_info=True)
             logger.info(f'Running again in {cf.run_every} seconds...')
             sleep(cf.run_every)
     else:
