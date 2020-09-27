@@ -8,3 +8,5 @@ run_every: 600 # seconds
 
 calendars:
   - "primary"
+
+log_level: "INFO"
