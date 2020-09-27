@@ -211,7 +211,7 @@ def update_task_name(event, task_id):
 
     item = cf.todoist_api.items.get(task_id)
     if item:
-        if item.get('item').get('content') != title:
+        if item['item']['content'] != title:
             logger.info(f'Updating task name for: "{event.summary}"')
             cf.todoist_api.items.update(task_id, content=title)
 
@@ -222,7 +222,7 @@ def update_task_note(event, note_id):
 
     note = api.notes.get(note_id)
     if note:
-        if note.get('note').get('content') != note_content:
+        if note.get('note')['content'] != note_content:
             logger.info(f'Updating note for: "{event.summary}"')
             cf.todoist_api.notes.update(note_id, content=note_content)
 
