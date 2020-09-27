@@ -287,7 +287,4 @@ if __name__ == '__main__':
         cf.project_id = fetch_project_id()
         cf.label_id = fetch_label_id()
 
-        print(cf.todoist_api.items.get(4208894219))
-        print(cf.todoist_api.items.get_by_id(4208894219))
-
-        # main()
+        main()
