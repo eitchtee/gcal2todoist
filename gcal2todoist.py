@@ -208,23 +208,22 @@ def clear_unattached_task(event, task_id, due_date):
 
 def update_task_name(event, task_id):
     title = generate_task_name(event.summary)
-
-    item = cf.todoist_api.items.get(task_id)
-    if item:
-        if item['item']['content'] != title:
-            logger.info(f'Updating task name for: "{event.summary}"')
-            cf.todoist_api.items.update(task_id, content=title)
+    item = cf.todoist_api.items.get_by_id(task_id)
+    cur_title = item['content'] if item else None
+    if cur_title and cur_title != title:
+        logger.info(f'Updating task name for: "{event.summary}"')
+        cf.todoist_api.items.update(task_id, content=title)
 
 
 def update_task_note(event, note_id):
     api = cf.todoist_api
     note_content = generate_note(event.location, event.description)
 
-    note = api.notes.get(note_id)
-    if note:
-        if note.get('note')['content'] != note_content:
-            logger.info(f'Updating note for: "{event.summary}"')
-            cf.todoist_api.notes.update(note_id, content=note_content)
+    note = api.notes.get_by_id(note_id)
+    cur_content = note['content'] if note else None
+    if cur_content and cur_content != note_content:
+        logger.info(f'Updating note for: "{event.summary}"')
+        cf.todoist_api.notes.update(note_id, content=note_content)
 
 
 def main():
@@ -274,6 +273,7 @@ if __name__ == '__main__':
             cf.label_id = fetch_label_id()
 
             main()
+            logger.info(f'Running again in {cf.run_every} seconds...')
             sleep(cf.run_every)
     else:
         cf.refresh_calendar()
