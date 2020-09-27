@@ -160,7 +160,7 @@ def add_task(event):
                                   (search.due_string == date))[0]
             task_id = result['task_id']
 
-            if not api.items.get(task_id):
+            if not api.items.get_by_id(task_id):
                 item = api.add_item(content=task,
                                     project_id=cf.project_id,
                                     labels=[cf.label_id],
@@ -284,4 +284,7 @@ if __name__ == '__main__':
         cf.project_id = fetch_project_id()
         cf.label_id = fetch_label_id()
 
-        main()
+        print(cf.todoist_api.items.get(4208894219))
+        print(cf.todoist_api.items.get_by_id(4208894219))
+
+        # main()
