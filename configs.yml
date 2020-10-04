@@ -10,3 +10,6 @@ calendars:
   - "primary"
 
 log_level: "INFO"
+
+task_prefix: "* 🗓️ *"
+task_suffix: "*"

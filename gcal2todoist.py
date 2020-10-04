@@ -48,6 +48,8 @@ class Configs:
         self.keep_running = data.get('keep_running')
         self.run_every = data.get('run_every')
         self.calendars = data.get('calendars', ['primary'])
+        self.task_prefix = data.get('task_prefix', "* 🗓️ ")
+        self.task_suffix = data.get('task_suffix', "")
 
         self.todoist_api = todoist.TodoistAPI(self.token)
         self.calendar = []
@@ -116,7 +118,7 @@ def generate_note(location, description):
 
 
 def generate_task_name(title):
-    return f"* 🗓️ **{title}**"
+    return f"{cf.task_prefix}{title}{cf.task_suffix}"
 
 
 def generate_desired_dates(event):
