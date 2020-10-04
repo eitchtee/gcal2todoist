@@ -10,7 +10,6 @@ import yaml
 from tinydb import TinyDB, Query
 from dateutil.parser import parse
 
-
 # Initialize logger handle
 logging.getLogger('googleapiclient').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
@@ -35,21 +34,16 @@ class GracefulKiller:
 
 class Configs:
     def __init__(self):
-        configs_path = os.path.join(os.path.dirname(__file__), 'configs.yml')
-        with open(configs_path, encoding='utf8') as file:
-            data = yaml.load(file, Loader=yaml.FullLoader)
+        self.token = None
+        self.project = None
+        self.label = None
+        self.keep_running = None
+        self.run_every = None
+        self.calendars = None
+        self.task_prefix = None
+        self.task_suffix = None
 
-        self.log_level = data.get('log_level', 'INFO')
-        logger.setLevel(self.log_level)
-
-        self.token = data.get('todoist_api_token')
-        self.project = data.get('default_project')
-        self.label = data.get('label')
-        self.keep_running = data.get('keep_running')
-        self.run_every = data.get('run_every')
-        self.calendars = data.get('calendars', ['primary'])
-        self.task_prefix = data.get('task_prefix', "* 🗓️ ")
-        self.task_suffix = data.get('task_suffix', "")
+        self.get_configs()
 
         self.todoist_api = todoist.TodoistAPI(self.token)
         self.calendar = []
@@ -67,6 +61,24 @@ class Configs:
                                                      os.path.dirname(__file__),
                                                      '.credentials',
                                                      'credentials.json')))
+
+    def get_configs(self):
+        configs_path = os.path.join(os.path.dirname(__file__), 'configs.yml')
+
+        with open(configs_path, encoding='utf8') as file:
+            data = yaml.load(file, Loader=yaml.FullLoader)
+
+        log_level = data.get('log_level', 'INFO')
+        logger.setLevel(log_level)
+
+        self.token = data.get('todoist_api_token')
+        self.project = data.get('default_project')
+        self.label = data.get('label')
+        self.keep_running = data.get('keep_running')
+        self.run_every = data.get('run_every')
+        self.calendars = data.get('calendars', ['primary'])
+        self.task_prefix = data.get('task_prefix', "* 🗓️ ")
+        self.task_suffix = data.get('task_suffix', "")
 
 
 def fetch_project_id():
@@ -271,6 +283,7 @@ if __name__ == '__main__':
         killer = GracefulKiller()
         while not killer.kill_now:
             try:
+                cf.get_configs()
                 cf.refresh_calendar()
                 cf.todoist_api.sync()
 
@@ -283,6 +296,7 @@ if __name__ == '__main__':
             logger.info(f'Running again in {cf.run_every} seconds...')
             sleep(cf.run_every)
     else:
+        cf.get_configs()
         cf.refresh_calendar()
         cf.todoist_api.sync()
 
