@@ -134,7 +134,7 @@ def generate_task_name(title):
 
 
 def generate_desired_dates(event):
-    date_range = [event.start + datetime.timedelta(days=x) for x in
+    date_range = [str(event.start + datetime.timedelta(days=x)) for x in
                   range(0, (event.end - event.start).days)]
 
     if not date_range:
@@ -153,7 +153,8 @@ def add_task(event):
     logger.info(f'Handling task: {event.summary}')
 
     for date in dates:
-        if date.date() < datetime.datetime.now().date():
+        due_date = parse(date)
+        if due_date.date() < datetime.datetime.today().date():
             continue
 
         search = Query()
@@ -212,7 +213,6 @@ def clear_unattached_task(event, task_id, due_date):
     api = cf.todoist_api
 
     dates = generate_desired_dates(event)
-    dates = [str(i) for i in dates]
 
     if due_date not in dates:
         logger.info(f'Removing unattached task from {event.summary}')
