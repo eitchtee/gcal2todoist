@@ -134,7 +134,7 @@ def generate_task_name(title):
 
 
 def generate_desired_dates(event):
-    date_range = [str(event.start + datetime.timedelta(days=x)) for x in
+    date_range = [event.start + datetime.timedelta(days=x) for x in
                   range(0, (event.end - event.start).days)]
 
     if not date_range:
@@ -153,6 +153,9 @@ def add_task(event):
     logger.info(f'Handling task: {event.summary}')
 
     for date in dates:
+        if date < datetime.datetime.today():
+            continue
+
         search = Query()
         if not cf.db.search((search.event_id == event.id) &
                             (search.due_string == date)):
