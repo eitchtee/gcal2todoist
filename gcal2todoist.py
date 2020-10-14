@@ -153,7 +153,7 @@ def add_task(event):
     logger.info(f'Handling task: {event.summary}')
 
     for date in dates:
-        if date < datetime.datetime.today():
+        if date < datetime.datetime.now():
             continue
 
         search = Query()
