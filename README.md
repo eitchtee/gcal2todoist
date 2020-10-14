@@ -17,11 +17,11 @@ This script aims to mimick TickTick's Google Calendar sync.
     <img alt="Gcal2Todoist Example" title="End result" src="./.github/images/end_result.png" />
 </div>
 
-Taks created by this script are uncompletable and preceded by "🗓️", having the event start date as their due date, they are also added to their own project and assigned a custom label. Also a comment is added to each task with the events location and description.
+Tasks created by this script are uncompletable and preceded by "🗓️", having the event start date as their due date, they are also added to their own project and assigned a custom label. Also a comment is added to each task with the events location and description.
 
 Multiple day events get a task for each day, with older tasks getting completed each day.
 
-Once an event is over, all taks related to it will be automatically completed.
+Once an event is over, all tasks related to it will be automatically completed.
 
 ## Getting started
 
