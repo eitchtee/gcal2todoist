@@ -212,6 +212,7 @@ def clear_unattached_task(event, task_id, due_date):
     api = cf.todoist_api
 
     dates = generate_desired_dates(event)
+    dates = [str(i) for i in dates]
 
     if due_date not in dates:
         logger.info(f'Removing unattached task from {event.summary}')
