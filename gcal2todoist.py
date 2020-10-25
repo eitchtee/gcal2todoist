@@ -112,7 +112,7 @@ def fetch_label_id():
     return r_label_id
 
 
-def generate_note(location, description):
+def generate_note(event):
     note = []
 
     if location:
@@ -147,7 +147,7 @@ def add_task(event):
     api = cf.todoist_api
 
     task = generate_task_name(event.summary)
-    note = generate_note(event.location, event.description)
+    note = generate_note(event)
     dates = generate_desired_dates(event)
 
     logger.info(f'Handling task: {event.summary}')
@@ -236,7 +236,7 @@ def update_task_name(event, task_id):
 
 def update_task_note(event, note_id):
     api = cf.todoist_api
-    note_content = generate_note(event.location, event.description)
+    note_content = generate_note(event)
 
     note = api.notes.get_by_id(note_id)
     cur_content = note['content'] if note else None
