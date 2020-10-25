@@ -55,12 +55,18 @@ class Configs:
     def refresh_calendar(self):
         self.calendar = []
         for calendar in self.calendars:
+            calendar_label = fetch_label_id(calendar['name'])
             logger.info(f'Getting calendar: "{calendar}"')
-            self.calendar += list(GoogleCalendar(calendar,
-                                                 credentials_path=os.path.join(
-                                                     os.path.dirname(__file__),
-                                                     '.credentials',
-                                                     'credentials.json')))
+            events = list(GoogleCalendar(calendar['id'],
+                                         credentials_path=os.path.join(
+                                             os.path.dirname(__file__),
+                                             '.credentials',
+                                             'credentials.json')))
+
+            for event in events:
+                setattr(event, 'calendar_label', calendar_label)
+
+            self.calendar += events
 
     def get_configs(self):
         configs_path = os.path.join(os.path.dirname(__file__), 'configs.yml')
@@ -187,7 +193,7 @@ def add_task(event):
                             (search.due_string == date)):
             item = api.add_item(content=task,
                                 project_id=cf.project_id,
-                                labels=[cf.label_id],
+                                labels=[cf.label_id, event.calendar_label],
                                 date_string=str(date),
                                 note=note)
 
@@ -206,7 +212,7 @@ def add_task(event):
             if not api.items.get_by_id(task_id):
                 item = api.add_item(content=task,
                                     project_id=cf.project_id,
-                                    labels=[cf.label_id],
+                                    labels=[cf.label_id, event.calendar_label],
                                     date_string=str(date),
                                     note=note)
 
