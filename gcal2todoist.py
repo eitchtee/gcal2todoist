@@ -114,13 +114,38 @@ def fetch_label_id():
 
 def generate_note(event):
     note = []
+    location = event.location
+    description = event.description
+    hangout_link = event.other.get('hangoutLink')
+    attendees = event.attendees
+    attendee_status = {'accepted': "🟢",
+                       'declined': "🔴",
+                       "needsAction": "⚫",
+                       "tentative": "🟡"}
 
     if location:
         note.append(f"📍 {location}")
+    if hangout_link:
+        if len(note) >= 1:
+            note.append('\n\n')
+        note.append(f"📞 {hangout_link}")
     if description:
         if len(note) >= 1:
             note.append('\n\n')
         note.append(f"📝 {description}")
+    if attendees:
+        if len(note) >= 1:
+            note.append('\n\n')
+        note.append("👥 Convidados:\n")
+        for attendee in attendees:
+            display_line = [attendee_status[attendee.response_status]]
+            if attendee.display_name:
+                display_line.append(attendee.display_name)
+            if attendee.email:
+                display_line.append(attendee.email)
+
+            if len(display_line) >= 2:
+                note.append(' - '.join(display_line) + '\n')
     if len(note) == 0:
         note.append('❌')
 
