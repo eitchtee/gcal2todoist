@@ -134,30 +134,27 @@ def generate_note(event):
     if location:
         note.append(f"📍 {location}")
     if hangout_link:
-        if len(note) >= 1:
-            note.append('\n\n')
         note.append(f"📞 {hangout_link}")
     if description:
-        if len(note) >= 1:
-            note.append('\n\n')
         note.append(f"📝 {description}")
     if attendees:
-        if len(note) >= 1:
-            note.append('\n\n')
-        note.append("👥 Convidados:\n")
+        result = ["👥 Convidados:\n"]
+
         for attendee in attendees:
             display_line = [attendee_status[attendee.response_status]]
+
             if attendee.display_name:
                 display_line.append(attendee.display_name)
             if attendee.email:
                 display_line.append(attendee.email)
 
             if len(display_line) >= 2:
-                note.append(' - '.join(display_line) + '\n')
+                result.append(' - '.join(display_line) + '\n')
+        note.append(''.join(result))
     if len(note) == 0:
         note.append('❌')
 
-    note = ''.join(note)
+    note = '\n\n'.join(note)
 
     return note
 
