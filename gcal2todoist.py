@@ -55,7 +55,8 @@ class Configs:
     def refresh_calendar(self):
         self.calendar = []
         for calendar in self.calendars:
-            calendar_label = fetch_label_id(calendar['name'])
+            calendar_project = fetch_project_id(calendar['name'],
+                                                self.project_id)
             logger.info(f'Getting calendar: "{calendar}"')
             events = list(GoogleCalendar(calendar['id'],
                                          credentials_path=os.path.join(
@@ -64,7 +65,7 @@ class Configs:
                                              'credentials.json')))
 
             for event in events:
-                setattr(event, 'calendar_label', calendar_label)
+                setattr(event, 'calendar_project', calendar_project)
 
             self.calendar += events
 
@@ -87,7 +88,7 @@ class Configs:
         self.task_suffix = data.get('task_suffix', "")
 
 
-def fetch_project_id(project_name):
+def fetch_project_id(project_name, parent_id=None):
     logger.info('Fetching desired project-id')
     matching_projects = [project for project
                          in cf.todoist_api.state['projects'] if
@@ -95,7 +96,8 @@ def fetch_project_id(project_name):
     if len(matching_projects) >= 1:
         proj_id = matching_projects[0]['id']
     else:
-        new_project = cf.todoist_api.projects.add(project_name)
+        new_project = cf.todoist_api.projects.add(project_name,
+                                                  parent_id=parent_id)
         cf.todoist_api.commit()
         proj_id = new_project['id']
 
@@ -192,8 +194,8 @@ def add_task(event):
         if not cf.db.search((search.event_id == event.id) &
                             (search.due_string == date)):
             item = api.add_item(content=task,
-                                project_id=cf.project_id,
-                                labels=[cf.label_id, event.calendar_label],
+                                project_id=event.calendar_project,
+                                labels=[cf.label_id],
                                 date_string=str(date),
                                 note=note)
 
@@ -211,8 +213,8 @@ def add_task(event):
 
             if not api.items.get_by_id(task_id):
                 item = api.add_item(content=task,
-                                    project_id=cf.project_id,
-                                    labels=[cf.label_id, event.calendar_label],
+                                    project_id=event.calendar_project,
+                                    labels=[cf.label_id],
                                     date_string=str(date),
                                     note=note)
 
@@ -319,11 +321,12 @@ if __name__ == '__main__':
         while not killer.kill_now:
             try:
                 cf.get_configs()
-                cf.refresh_calendar()
-                cf.todoist_api.sync()
 
                 cf.project_id = fetch_project_id(cf.project)
                 cf.label_id = fetch_label_id(cf.label)
+
+                cf.refresh_calendar()
+                cf.todoist_api.sync()
 
                 main()
             except Exception as e:
@@ -332,10 +335,11 @@ if __name__ == '__main__':
             sleep(cf.run_every)
     else:
         cf.get_configs()
-        cf.refresh_calendar()
-        cf.todoist_api.sync()
 
         cf.project_id = fetch_project_id(cf.project)
         cf.label_id = fetch_label_id(cf.label)
+
+        cf.refresh_calendar()
+        cf.todoist_api.sync()
 
         main()
