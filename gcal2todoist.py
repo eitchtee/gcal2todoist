@@ -81,15 +81,15 @@ class Configs:
         self.task_suffix = data.get('task_suffix', "")
 
 
-def fetch_project_id():
+def fetch_project_id(project_name):
     logger.info('Fetching desired project-id')
     matching_projects = [project for project
                          in cf.todoist_api.state['projects'] if
-                         project['name'] == Configs().project]
+                         project['name'] == project_name]
     if len(matching_projects) >= 1:
         proj_id = matching_projects[0]['id']
     else:
-        new_project = cf.todoist_api.projects.add(Configs().project)
+        new_project = cf.todoist_api.projects.add(project_name)
         cf.todoist_api.commit()
         proj_id = new_project['id']
 
@@ -97,14 +97,14 @@ def fetch_project_id():
     return proj_id
 
 
-def fetch_label_id():
+def fetch_label_id(label_name):
     logger.info('Fetching desired label-id')
     matching_labels = [label for label in cf.todoist_api.state['labels'] if
-                       label['name'] == Configs().label]
+                       label['name'] == label_name]
     if len(matching_labels) >= 1:
         r_label_id = matching_labels[0]['id']
     else:
-        new_label = cf.todoist_api.labels.add(Configs().label)
+        new_label = cf.todoist_api.labels.add(label_name)
         cf.todoist_api.commit()
         r_label_id = new_label['id']
 
@@ -316,8 +316,8 @@ if __name__ == '__main__':
                 cf.refresh_calendar()
                 cf.todoist_api.sync()
 
-                cf.project_id = fetch_project_id()
-                cf.label_id = fetch_label_id()
+                cf.project_id = fetch_project_id(cf.project)
+                cf.label_id = fetch_label_id(cf.label)
 
                 main()
             except Exception as e:
@@ -329,7 +329,7 @@ if __name__ == '__main__':
         cf.refresh_calendar()
         cf.todoist_api.sync()
 
-        cf.project_id = fetch_project_id()
-        cf.label_id = fetch_label_id()
+        cf.project_id = fetch_project_id(cf.project)
+        cf.label_id = fetch_label_id(cf.label)
 
         main()
