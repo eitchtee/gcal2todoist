@@ -41,6 +41,7 @@ class Configs:
         self.calendars = None
         self.task_prefix = None
         self.task_suffix = None
+        self.completed_label = None
 
         self.get_configs()
 
@@ -87,6 +88,7 @@ class Configs:
         self.calendars = data.get("calendars", ["primary"])
         self.task_prefix = data.get("task_prefix", "* 🗓️ ")
         self.task_suffix = data.get("task_suffix", "")
+        self.completed_label = data.get("completed_label")
 
 
 def fetch_project_id(project_name, parent_id=None):
@@ -222,8 +224,9 @@ def add_task(event):
                 (search.event_id == event.id) & (search.due_string == date)
             )[0]
             task_id = result["task_id"]
+            task_obj = api.items.get_by_id(task_id)
 
-            if not api.items.get_by_id(task_id):
+            if not task_obj:
                 item = api.add_item(
                     content=task,
                     project_id=event.calendar_project,
@@ -243,6 +246,10 @@ def add_task(event):
                     },
                     (search.event_id == event.id) & (search.due_string == date),
                 )
+            elif cf.completed_label in task_obj["labels"] and not task_obj["checked"]:
+                logger.info(f"Completing task by request: {event.summary}")
+                api.items.complete(task_id)
+                api.commit()
 
 
 def clear_yesterday_tasks(event):

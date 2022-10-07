@@ -50,6 +50,9 @@ calendars: # Add here the id of as many calendars as you want to sync.
   - "primary" # your main calendar
 
 log_level: "INFO" # Currently only INFO level logs are avaliable.
+
+completed_label: A_LABEL_ID # Add this label to a event to complete it before it's given time (useful for full day 
+  events)
 ```
 
 ## Contributing

@@ -14,3 +14,5 @@ log_level: "INFO"
 
 task_prefix: "* 🗓️ *"
 task_suffix: "*"
+
+completed_label: 2162496146
