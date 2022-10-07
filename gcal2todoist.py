@@ -167,7 +167,7 @@ def generate_note(event):
 
 
 def generate_task_name(title):
-    return f"{cf.task_prefix}{title}{cf.task_suffix}"
+    return f"{cf.task_prefix}{title.strip()}{cf.task_suffix}"
 
 
 def generate_desired_dates(event):
