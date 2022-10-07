@@ -309,10 +309,13 @@ def main():
         note_id = entry.get("note_id")
         event_id = entry.get("event_id")
 
-        if entry['event_id'] not in all_event_ids:
-            logger.info(f'Completing non-existant event-task {task_id}')
-            api.items.complete(task_id)
-            api.commit()
+        if entry["event_id"] not in all_event_ids:
+            logger.info(f"Completing non-existant event-task {task_id}")
+            try:
+                api.items.complete(task_id)
+                api.commit()
+            except todoist.api.SyncError:
+                pass
             db.remove(Query().event_id == event_id)
             continue  # Skip updating as the event is over
 
