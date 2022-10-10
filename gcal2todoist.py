@@ -350,9 +350,9 @@ def main():
         event_id = entry.get("event_id")
 
         if entry["event_id"] not in all_event_ids:
-            logger.info(f"Completing non-existant event-task {task_id}")
+            logger.info(f"Deleting non-existant event-task {task_id}")
             try:
-                api.items.complete(task_id)
+                api.items.delete(task_id)
                 api.commit()
             except todoist.api.SyncError:
                 pass
