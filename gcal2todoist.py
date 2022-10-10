@@ -55,16 +55,23 @@ class Configs:
     def refresh_calendar(self):
         self.calendar = []
         for calendar in self.calendars:
+            gc = GoogleCalendar(
+                calendar["id"],
+                credentials_path=os.path.join(
+                    os.path.dirname(__file__), ".credentials", "credentials.json"
+                ),
+            ).get_events(
+                time_min=datetime.datetime.today(),
+                time_max=datetime.datetime.today()
+                + datetime.timedelta(
+                    days=31,
+                ),
+                single_events=True,
+            )
+
             calendar_project = fetch_project_id(calendar["name"], self.project_id)
             logger.info(f'Getting calendar: "{calendar}"')
-            events = list(
-                GoogleCalendar(
-                    calendar["id"],
-                    credentials_path=os.path.join(
-                        os.path.dirname(__file__), ".credentials", "credentials.json"
-                    ),
-                )
-            )
+            events = list(gc)
 
             for event in events:
                 setattr(event, "calendar_project", calendar_project)
