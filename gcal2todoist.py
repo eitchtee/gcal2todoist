@@ -68,6 +68,7 @@ class Configs:
 
             for event in events:
                 setattr(event, "calendar_project", calendar_project)
+                setattr(event, "calendar_name", calendar["id"])
 
             self.calendar += events
 
@@ -191,6 +192,10 @@ def add_task(event):
 
     logger.info(f"Handling task: {event.summary}")
 
+    event_atendees = {
+        atendee.email: atendee.response_status for atendee in event.attendees
+    }
+
     for date in dates:
         due_date = parse(date)
         if due_date.date() < datetime.datetime.today().date():
@@ -200,24 +205,31 @@ def add_task(event):
         if not cf.db.search(
             (search.event_id == event.id) & (search.due_string == date)
         ):
-            item = api.add_item(
-                content=task,
-                project_id=event.calendar_project,
-                labels=[cf.label_id],
-                date_string=str(date),
-                note=note,
-            )
+            if not event.attendees or (
+                event.attendees
+                and event.calendar_name in event_atendees.keys()
+                and event_atendees[event.calendar_name]
+                in ["accepted", "needsAction", "tentative"]
+            ):
+                logger.info(f"Adding event task: {event.summary}")
+                item = api.add_item(
+                    content=task,
+                    project_id=event.calendar_project,
+                    labels=[cf.label_id],
+                    date_string=str(date),
+                    note=note,
+                )
 
-            api.commit()
+                api.commit()
 
-            cf.db.insert(
-                {
-                    "event_id": event.id,
-                    "task_id": item["id"],
-                    "note_id": item["note"]["id"],
-                    "due_string": date,
-                }
-            )
+                cf.db.insert(
+                    {
+                        "event_id": event.id,
+                        "task_id": item["id"],
+                        "note_id": item["note"]["id"],
+                        "due_string": date,
+                    }
+                )
         else:
             search = Query()
             result = cf.db.search(
@@ -246,9 +258,23 @@ def add_task(event):
                     },
                     (search.event_id == event.id) & (search.due_string == date),
                 )
+
             elif cf.completed_label in task_obj["labels"] and not task_obj["checked"]:
                 logger.info(f"Completing task by request: {event.summary}")
                 api.items.complete(task_id)
+                api.commit()
+
+            if (
+                event.attendees
+                and event.calendar_name in event_atendees.keys()
+                and event_atendees[event.calendar_name]
+                not in ["accepted", "needsAction", "tentative"]
+            ):
+                logger.info(f"Deleting not accepted event task: {event.summary}")
+                api.items.delete(task_id)
+                cf.db.remove(
+                    (search.task_id == task_id) & ((search.event_id == event.id))
+                )
                 api.commit()
 
 
