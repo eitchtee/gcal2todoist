@@ -227,13 +227,15 @@ def add_task(event):
                     note=note,
                 )
 
+                item = api.items.get(item["id"])
+
                 api.commit()
 
                 cf.db.insert(
                     {
                         "event_id": event.id,
-                        "task_id": item["id"],
-                        "note_id": item["note"]["id"],
+                        "task_id": item["item"]["id"],
+                        "note_id": item["notes"][0]["id"],
                         "due_string": date,
                     }
                 )
@@ -256,11 +258,13 @@ def add_task(event):
 
                 api.commit()
 
+                item = api.items.get(item["id"])
+
                 cf.db.update(
                     {
                         "event_id": event.id,
-                        "task_id": item["id"],
-                        "note_id": item["note"]["id"],
+                        "task_id": item["item"]["id"],
+                        "note_id": item["notes"][0]["id"],
                         "due_string": date,
                     },
                     (search.event_id == event.id) & (search.due_string == date),
