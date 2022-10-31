@@ -65,7 +65,7 @@ class Configs:
                 time_min=datetime.datetime.today(),
                 time_max=datetime.datetime.today()
                 + datetime.timedelta(
-                    days=15,
+                    days=7,
                 ),
                 single_events=True,
             )
