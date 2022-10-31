@@ -300,8 +300,7 @@ def clear_yesterday_tasks(event):
         due_date = parse(task["due_string"])
         if due_date.date() < datetime.datetime.today().date():
             logger.info(f'Removing stale "{i}" task from "{event.summary}"')
-            api.items.complete(task["task_id"])
-            api.commit()
+            api.close_task(task["task_id"])
             cf.db.remove(Query().task_id == task["task_id"])
 
 
@@ -312,8 +311,7 @@ def clear_unattached_task(event, task_id, due_date):
 
     if due_date not in dates:
         logger.info(f"Removing unattached task from {event.summary}")
-        api.items.delete(task_id)
-        api.commit()
+        api.delete_task(task_id)
         cf.db.remove((Query().task_id == task_id) & (Query().due_string == due_date))
         return True
 
@@ -322,22 +320,22 @@ def clear_unattached_task(event, task_id, due_date):
 
 def update_task_name(event, task_id):
     title = generate_task_name(event.summary)
-    item = cf.todoist_api.items.get_by_id(task_id)
-    cur_title = item["content"] if item else None
+    item = cf.todoist_api.get_task(task_id)
+    cur_title = item.content if item else None
     if cur_title and cur_title != title:
         logger.info(f'Updating task name for: "{event.summary}"')
-        cf.todoist_api.items.update(task_id, content=title)
+        cf.todoist_api.update_task(task_id, content=title)
 
 
 def update_task_note(event, note_id):
     api = cf.todoist_api
     note_content = generate_note(event)
 
-    note = api.notes.get_by_id(note_id)
-    cur_content = note["content"] if note else None
+    note = api.get_comment(note_id)
+    cur_content = note.content if note else None
     if cur_content and cur_content != note_content:
         logger.info(f'Updating note for: "{event.summary}"')
-        cf.todoist_api.notes.update(note_id, content=note_content)
+        cf.todoist_api.update_comment(comment_id=note_id, content=note_content)
 
 
 def main():
@@ -348,6 +346,7 @@ def main():
     for event in calendar:
         add_task(event)
         clear_yesterday_tasks(event)
+        sleep(5)  # Try to skip rate limiting
 
     all_event_ids = [x.id for x in calendar]
     for entry in db:
@@ -357,11 +356,8 @@ def main():
 
         if entry["event_id"] not in all_event_ids:
             logger.info(f"Deleting non-existant event-task {task_id}")
-            try:
-                api.items.delete(task_id)
-                api.commit()
-            except todoist.api.SyncError:
-                pass
+            api.delete_task(task_id)
+
             db.remove(Query().event_id == event_id)
             continue  # Skip updating as the event is over
 
@@ -373,8 +369,9 @@ def main():
         update_task_name(event, task_id)
         update_task_note(event, note_id)
 
+        sleep(5)  # Try to skip rate limiting
+
     logger.info("Commiting final changes...")
-    api.commit()
 
 
 if __name__ == "__main__":
