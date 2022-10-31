@@ -320,7 +320,10 @@ def clear_unattached_task(event, task_id, due_date):
 
 def update_task_name(event, task_id):
     title = generate_task_name(event.summary)
-    item = cf.todoist_api.get_task(task_id)
+    try:
+        item = cf.todoist_api.get_task(task_id)
+    except HTTPError:
+        return
     cur_title = item.content if item else None
     if cur_title and cur_title != title:
         logger.info(f'Updating task name for: "{event.summary}"')
@@ -331,7 +334,10 @@ def update_task_note(event, note_id):
     api = cf.todoist_api
     note_content = generate_note(event)
 
-    note = api.get_comment(note_id)
+    try:
+        note = api.get_comment(note_id)
+    except HTTPError:
+        return
     cur_content = note.content if note else None
     if cur_content and cur_content != note_content:
         logger.info(f'Updating note for: "{event.summary}"')
