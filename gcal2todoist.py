@@ -57,7 +57,7 @@ class Configs:
         self.calendar = []
         for calendar in self.calendars:
             gc = GoogleCalendar(
-                calendar["id"],
+                calendar["gcal_id"],
                 credentials_path=os.path.join(
                     os.path.dirname(__file__), ".credentials", "credentials.json"
                 ),
@@ -70,13 +70,13 @@ class Configs:
                 single_events=True,
             )
 
-            calendar_project = fetch_project_id(calendar["name"], self.project_id)
+            calendar_project = calendar["todoist_id"]
             logger.info(f'Getting calendar: "{calendar}"')
             events = list(gc)
 
             for event in events:
                 setattr(event, "calendar_project", calendar_project)
-                setattr(event, "calendar_name", calendar["id"])
+                setattr(event, "calendar_name", calendar["gcal_id"])
 
             self.calendar += events
 
@@ -94,7 +94,7 @@ class Configs:
         self.label = data.get("label")
         self.keep_running = data.get("keep_running")
         self.run_every = data.get("run_every")
-        self.calendars = data.get("calendars", ["primary"])
+        # self.calendars = data.get("calendars", ["primary"])
         self.task_prefix = data.get("task_prefix", "* 🗓️ ")
         self.task_suffix = data.get("task_suffix", "")
         self.completed_label = data.get("completed_label")
@@ -385,6 +385,22 @@ if __name__ == "__main__":
 
                 cf.project_id = fetch_project_id(cf.project)
                 cf.label_id = fetch_label_id(cf.label)
+
+                calendar_projects = []
+                for project in [
+                    x.id
+                    for x in cf.todoist_api.get_projects()
+                    if x.parent_id == cf.project_id and x.comment_count >= 1
+                ]:
+                    gcal_calendar_id = cf.todoist_api.get_comments(project_id=project)[
+                        0
+                    ].content
+
+                    calendar_projects.append(
+                        {"gcal_id": gcal_calendar_id, "todoist_id": project}
+                    )
+
+                cf.calendars = calendar_projects
 
                 cf.refresh_calendar()
 
