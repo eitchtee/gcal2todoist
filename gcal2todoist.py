@@ -422,6 +422,5 @@ if __name__ == "__main__":
         cf.label_id = fetch_label_id(cf.label)
 
         cf.refresh_calendar()
-        cf.todoist_api.sync()
 
         main()
