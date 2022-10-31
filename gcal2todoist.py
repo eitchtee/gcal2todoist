@@ -217,7 +217,7 @@ def add_task(event):
 
         search = Query()
         if not cf.db.search(
-            (search.event_id == event.id) & (search.due_string == date)
+            (search.event_id == event.id) & (search.due_string == str(date_))
         ):
             if not event.attendees or (
                 event.attendees
@@ -246,7 +246,7 @@ def add_task(event):
         else:
             search = Query()
             result = cf.db.search(
-                (search.event_id == event.id) & (search.due_string == date)
+                (search.event_id == event.id) & (search.due_string == str(date_))
             )[0]
             task_id = result["task_id"]
             try:
@@ -271,7 +271,7 @@ def add_task(event):
                         "note_id": comment.id,
                         "due_string": str(date_),
                     },
-                    (search.event_id == event.id) & (search.due_string == date_),
+                    (search.event_id == event.id) & (search.due_string == str(date_)),
                 )
 
             elif cf.completed_label in task_obj.labels and not task_obj.is_completed:
