@@ -1,5 +1,5 @@
 pyYAML
-todoist-python
 gcsa
 tinydb
 python-dateutil
+todoist-api-python

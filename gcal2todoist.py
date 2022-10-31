@@ -4,7 +4,8 @@ import datetime
 import os
 import logging
 
-import todoist
+from requests import HTTPError
+from todoist_api_python.api import TodoistAPI
 from gcsa.google_calendar import GoogleCalendar
 import yaml
 from tinydb import TinyDB, Query
@@ -45,7 +46,7 @@ class Configs:
 
         self.get_configs()
 
-        self.todoist_api = todoist.TodoistAPI(self.token)
+        self.todoist_api = TodoistAPI(self.token)
         self.calendar = []
         self.db = TinyDB(os.path.join(os.path.dirname(__file__), "events.json"))
 
@@ -103,15 +104,14 @@ def fetch_project_id(project_name, parent_id=None):
     logger.info("Fetching desired project-id")
     matching_projects = [
         project
-        for project in cf.todoist_api.state["projects"]
-        if project["name"] == project_name
+        for project in cf.todoist_api.get_projects()
+        if project.name == project_name
     ]
     if len(matching_projects) >= 1:
-        proj_id = matching_projects[0]["id"]
+        proj_id = matching_projects[0].id
     else:
-        new_project = cf.todoist_api.projects.add(project_name, parent_id=parent_id)
-        cf.todoist_api.commit()
-        proj_id = new_project["id"]
+        new_project = cf.todoist_api.add_project(project_name, parent_id=parent_id)
+        proj_id = new_project.id
 
     logger.info(f"Project-id found: {proj_id}")
     return proj_id
@@ -120,14 +120,13 @@ def fetch_project_id(project_name, parent_id=None):
 def fetch_label_id(label_name):
     logger.info("Fetching desired label-id")
     matching_labels = [
-        label for label in cf.todoist_api.state["labels"] if label["name"] == label_name
+        label for label in cf.todoist_api.get_labels() if label.name == label_name
     ]
     if len(matching_labels) >= 1:
-        r_label_id = matching_labels[0]["id"]
+        r_label_id = matching_labels[0].id
     else:
-        new_label = cf.todoist_api.labels.add(label_name)
-        cf.todoist_api.commit()
-        r_label_id = new_label["id"]
+        new_label = cf.todoist_api.add_label(label_name)
+        r_label_id = new_label.id
 
     logger.info(f"Label-id found: {r_label_id}")
     return r_label_id
@@ -180,12 +179,12 @@ def generate_task_name(title):
 
 def generate_desired_dates(event):
     date_range = [
-        str(event.start + datetime.timedelta(days=x))
+        event.start + datetime.timedelta(days=x)
         for x in range(0, (event.end - event.start).days)
     ]
 
     if not date_range:
-        date_range.append(str(event.start))
+        date_range.append(event.start)
 
     return date_range
 
@@ -203,8 +202,16 @@ def add_task(event):
         atendee.email: atendee.response_status for atendee in event.attendees
     }
 
-    for date in dates:
-        due_date = parse(date)
+    for date_ in dates:
+        due_date = parse(str(date_))
+
+        if type(date_) is datetime.datetime:
+            date = str(date_.astimezone(datetime.timezone.utc))
+            task_date = {"due_date": date}
+        else:
+            date = str(date_)
+            task_date = {"due_datetime": date}
+
         if due_date.date() < datetime.datetime.today().date():
             continue
 
@@ -219,23 +226,20 @@ def add_task(event):
                 in ["accepted", "needsAction", "tentative"]
             ):
                 logger.info(f"Adding event task: {event.summary}")
-                item = api.add_item(
+                item = api.add_task(
                     content=task,
                     project_id=event.calendar_project,
-                    labels=[cf.label_id],
-                    date_string=str(date),
-                    note=note,
+                    labels=[cf.label],
+                    **task_date,
                 )
 
-                item = api.items.get(item["id"])
-
-                api.commit()
+                comment = api.add_comment(content=note, task_id=item.id)
 
                 cf.db.insert(
                     {
                         "event_id": event.id,
-                        "task_id": item["item"]["id"],
-                        "note_id": item["notes"][0]["id"],
+                        "task_id": item.id,
+                        "note_id": comment.id,
                         "due_string": date,
                     }
                 )
@@ -245,35 +249,34 @@ def add_task(event):
                 (search.event_id == event.id) & (search.due_string == date)
             )[0]
             task_id = result["task_id"]
-            task_obj = api.items.get_by_id(task_id)
+            try:
+                task_obj = api.get_task(task_id)
+            except HTTPError:
+                task_obj = None
 
             if not task_obj:
-                item = api.add_item(
+                item = api.add_task(
                     content=task,
                     project_id=event.calendar_project,
-                    labels=[cf.label_id],
-                    date_string=str(date),
-                    note=note,
+                    labels=[cf.label],
+                    **task_date,
                 )
 
-                api.commit()
-
-                item = api.items.get(item["id"])
+                comment = api.add_comment(content=note, task_id=item.id)
 
                 cf.db.update(
                     {
                         "event_id": event.id,
-                        "task_id": item["item"]["id"],
-                        "note_id": item["notes"][0]["id"],
-                        "due_string": date,
+                        "task_id": item.id,
+                        "note_id": comment.id,
+                        "due_string": str(due_date.astimezone(datetime.timezone.utc)),
                     },
                     (search.event_id == event.id) & (search.due_string == date),
                 )
 
-            elif cf.completed_label in task_obj["labels"] and not task_obj["checked"]:
+            elif cf.completed_label in task_obj.labels and not task_obj.is_completed:
                 logger.info(f"Completing task by request: {event.summary}")
-                api.items.complete(task_id)
-                api.commit()
+                api.close_task(task_id)
 
             if (
                 event.attendees
@@ -282,11 +285,10 @@ def add_task(event):
                 not in ["accepted", "needsAction", "tentative"]
             ):
                 logger.info(f"Deleting not accepted event task: {event.summary}")
-                api.items.delete(task_id)
+                api.delete_task(task_id)
                 cf.db.remove(
                     (search.task_id == task_id) & ((search.event_id == event.id))
                 )
-                api.commit()
 
 
 def clear_yesterday_tasks(event):
@@ -388,7 +390,6 @@ if __name__ == "__main__":
                 cf.label_id = fetch_label_id(cf.label)
 
                 cf.refresh_calendar()
-                cf.todoist_api.sync()
 
                 main()
             except Exception as e:
