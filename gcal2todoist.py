@@ -240,7 +240,7 @@ def add_task(event):
                         "event_id": event.id,
                         "task_id": item.id,
                         "note_id": comment.id,
-                        "due_string": date,
+                        "due_string": str(date_),
                     }
                 )
         else:
@@ -269,9 +269,9 @@ def add_task(event):
                         "event_id": event.id,
                         "task_id": item.id,
                         "note_id": comment.id,
-                        "due_string": str(due_date.astimezone(datetime.timezone.utc)),
+                        "due_string": str(date_),
                     },
-                    (search.event_id == event.id) & (search.due_string == date),
+                    (search.event_id == event.id) & (search.due_string == date_),
                 )
 
             elif cf.completed_label in task_obj.labels and not task_obj.is_completed:
@@ -307,7 +307,7 @@ def clear_yesterday_tasks(event):
 def clear_unattached_task(event, task_id, due_date):
     api = cf.todoist_api
 
-    dates = generate_desired_dates(event)
+    dates = [str(x) for x in generate_desired_dates(event)]
 
     if due_date not in dates:
         logger.info(f"Removing unattached task from {event.summary}")
