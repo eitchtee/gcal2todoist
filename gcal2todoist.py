@@ -409,7 +409,22 @@ if __name__ == "__main__":
         cf.get_configs()
 
         cf.project_id = fetch_project_id(cf.project)
-        cf.label_id = fetch_label_id(cf.label)
+
+        calendar_projects = []
+        for project in [
+            x.id
+            for x in cf.todoist_api.get_projects()
+            if x.parent_id == cf.project_id and x.comment_count >= 1
+        ]:
+            gcal_calendar_id = cf.todoist_api.get_comments(project_id=project)[
+                0
+            ].content
+
+            calendar_projects.append(
+                {"gcal_id": gcal_calendar_id, "todoist_id": project}
+            )
+
+        cf.calendars = calendar_projects
 
         cf.refresh_calendar()
 
