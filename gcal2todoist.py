@@ -234,7 +234,9 @@ def add_task(event):
                         **task_date,
                     )
 
-                comment = api.add_comment(content=note, task_id=item.id)
+                    comment = api.add_comment(content=note, task_id=item.id)
+                except HTTPError:
+                    return
 
                 cf.db.insert(
                     {
