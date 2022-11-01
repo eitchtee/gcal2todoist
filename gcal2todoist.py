@@ -51,7 +51,6 @@ class Configs:
         self.db = TinyDB(os.path.join(os.path.dirname(__file__), "events.json"))
 
         self.project_id = None
-        self.label_id = None
 
     def refresh_calendar(self):
         self.calendar = []
@@ -115,21 +114,6 @@ def fetch_project_id(project_name, parent_id=None):
 
     logger.info(f"Project-id found: {proj_id}")
     return proj_id
-
-
-def fetch_label_id(label_name):
-    logger.info("Fetching desired label-id")
-    matching_labels = [
-        label for label in cf.todoist_api.get_labels() if label.name == label_name
-    ]
-    if len(matching_labels) >= 1:
-        r_label_id = matching_labels[0].id
-    else:
-        new_label = cf.todoist_api.add_label(label_name)
-        r_label_id = new_label.id
-
-    logger.info(f"Label-id found: {r_label_id}")
-    return r_label_id
 
 
 def generate_note(event):
@@ -344,6 +328,7 @@ def update_task_note(event, note_id):
         note = api.get_comment(note_id)
     except HTTPError:
         return
+
     cur_content = note.content if note else None
     if cur_content and cur_content != note_content:
         logger.info(f'Updating note for: "{event.summary}"')
@@ -396,7 +381,6 @@ if __name__ == "__main__":
                 cf.get_configs()
 
                 cf.project_id = fetch_project_id(cf.project)
-                cf.label_id = fetch_label_id(cf.label)
 
                 calendar_projects = []
                 for project in [
