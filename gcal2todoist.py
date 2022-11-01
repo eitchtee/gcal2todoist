@@ -251,8 +251,11 @@ def add_task(event):
             task_id = result["task_id"]
             try:
                 task_obj = api.get_task(task_id)
-            except HTTPError:
-                task_obj = None
+            except HTTPError as err:
+                if err.response.status_code == 404:
+                    task_obj = None
+                else:
+                    return
 
             if not task_obj:
                 item = api.add_task(
