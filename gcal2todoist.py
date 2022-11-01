@@ -226,12 +226,13 @@ def add_task(event):
                 in ["accepted", "needsAction", "tentative"]
             ):
                 logger.info(f"Adding event task: {event.summary}")
-                item = api.add_task(
-                    content=task,
-                    project_id=event.calendar_project,
-                    labels=[cf.label],
-                    **task_date,
-                )
+                try:
+                    item = api.add_task(
+                        content=task,
+                        project_id=event.calendar_project,
+                        labels=[cf.label],
+                        **task_date,
+                    )
 
                 comment = api.add_comment(content=note, task_id=item.id)
 
