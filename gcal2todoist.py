@@ -168,7 +168,7 @@ def generate_note(event):
     if len(note) == 0:
         note.append("❌")
 
-    note = "\n\n".join(note)
+    note = "\n\n".join(note).strip()
 
     return note
 
