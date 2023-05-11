@@ -1,8 +1,3 @@
-<!--
-<div align="center">
-    <img alt="BitcoinWalletBot Example" title="BitcoinWalletBot" src="./.github/images/header.png" />
-</div>-->
-
 <h3 align="center">Google Calendar 2 Todoist</h3>
 <p align="center">A one-way sync between Google Calendar events and Todoist.</p>
 
@@ -46,14 +41,22 @@ label: "Event" # Custom label to be added to each task created by the script.
 keep_running: false # If false, script will run only once. Else it will run every n seconds
 run_every: 600 # seconds
 
-calendars: # Add here the id of as many calendars as you want to sync.
-  - "primary" # your main calendar
-
 log_level: "INFO" # Currently only INFO level logs are avaliable.
 
-completed_label: A_LABEL_ID # Add this label to a event to complete it before it's given time (useful for full day 
-  events)
+completed_label: "Done" # Add this label to a event to complete it before it's given time (useful for full day events)
 ```
+
+
+### Syncing Calendars
+To sync a calendar
+1. Create a Todoist Project with the same name as the ``default_project`` set on ``configs.yml``.
+1. Add a new project as a child of the default project (one project for each calendar you want to sync)
+<img alt="Project Structure" title="Project Structure" src="./.github/images/project_structure.png" />
+1. In this project add a project comment with the ID of the Google Calendar you want to sync
+<img alt="Project Comment" title="Project Comment" src="./.github/images/calendar_comment.png" />
+1. Run this script
+
+
 
 ## Contributing
 Due to the lack of a start and end date on Todoist tasks, syncing with Google Calendar poses an interesting challenge, if you feel like you can improve this script please open an issue or a pull request, they are very much welcome.
