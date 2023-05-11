@@ -11,6 +11,8 @@ import yaml
 from tinydb import TinyDB, Query
 from dateutil.parser import parse
 
+from markdownify import markdownify
+
 # Initialize logger handle
 logging.getLogger("googleapiclient").setLevel(logging.CRITICAL)
 logger = logging.getLogger()
@@ -134,7 +136,7 @@ def generate_note(event):
     if hangout_link:
         note.append(f"📞 {hangout_link}")
     if description:
-        note.append(f"📝 {description}")
+        note.append(f"📝 {markdownify(description)}")
     if attendees:
         result = ["👥 Convidados:\n"]
 

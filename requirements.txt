@@ -3,3 +3,4 @@ gcsa
 tinydb
 python-dateutil
 todoist-api-python
+markdownify==0.11.6
