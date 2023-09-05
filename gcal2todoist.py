@@ -299,6 +299,9 @@ class Task:
         for date_, duration, i in self.dates:
             due_date = parse(str(date_))
 
+            if due_date.date() < datetime.datetime.today().date():
+                continue
+
             if type(date_) is datetime.datetime:
                 date = str(date_.astimezone(datetime.timezone.utc))
                 task_date = {"due_date": date}
@@ -311,9 +314,6 @@ class Task:
             if duration:
                 task_date["duration"] = duration
                 task_date["duration_unit"] = "minute"
-
-            if due_date.date() < datetime.datetime.today().date():
-                continue
 
             search = Query()
             if not self.g2t.db.search(
