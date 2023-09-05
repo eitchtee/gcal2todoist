@@ -258,11 +258,11 @@ class Task:
     def generate_desired_dates(self):
         date_range = []
 
-        start = 0
-        end = (self.event.end - self.event.start).days
+        start = 0  # Range start
+        end = (self.event.end - self.event.start).days  # Range end
 
         if end >= 1:
-            end += 1
+            end += 1  # Catch multi-day events
 
         for x in range(start, end):
             if x == start:
@@ -270,12 +270,16 @@ class Task:
             else:
                 start_date = self.event.start + datetime.timedelta(days=x)
                 if type(self.event.start) == datetime.datetime:
+                    # if a multi-day event start and end times, set the start time to midnight on the second day forward
                     start_date = start_date.replace(hour=0, minute=0, second=0)
+
+            if start_date >= self.event.end:
+                continue
 
             duration = self.event.end - start_date
             duration = int(duration.total_seconds() / 60)
 
-            if duration > 1440:
+            if duration > 1440:  # Todoist tasks has a maximum duration of 24 hours
                 duration = None
 
             date_range.append((start_date, duration, x))
@@ -283,7 +287,7 @@ class Task:
         if not date_range:
             duration = self.event.end - self.event.start
             duration = int(duration.total_seconds() / 60)
-            if duration >= 1440:
+            if duration >= 1440:  # Todoist tasks has a maximum duration of 24 hours
                 duration = None
             date_range.append((self.event.start, duration, 0))
 
@@ -316,11 +320,12 @@ class Task:
                 task_date["duration_unit"] = "minute"
 
             search = Query()
+
             if not self.g2t.db.search(
                 (search.event_id == self.event.id)
                 & (search.due_string == str(date_))
                 & (search.index == i)
-            ):
+            ):  # Event does not exist on DB
                 if not self.event.attendees or (
                     self.event.attendees
                     and self.event.calendar_name in event_atendees.keys()
@@ -385,8 +390,8 @@ class Task:
                     self.g2t.db.update(
                         {
                             "event_id": self.event.id,
-                            "task_id": item.id,
-                            "note_id": comment.id,
+                            "task_id": item["id"],
+                            "note_id": comment["id"],
                             "due_string": str(date_),
                             "index": i,
                         },
