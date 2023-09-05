@@ -7,7 +7,7 @@ import logging
 from requests import HTTPError
 from todoist_api_python.api import TodoistAPI
 from gcsa.google_calendar import GoogleCalendar
-import gcsa.event
+from gcsa.event import Event
 import yaml
 from tinydb import TinyDB, Query
 from dateutil.parser import parse
@@ -202,7 +202,7 @@ class Gcal2Todoist:
 
 
 class Task:
-    def __init__(self, event: gcsa.event, gt: Gcal2Todoist):
+    def __init__(self, event: Event, gt: Gcal2Todoist):
         self.event = event
         self.g2t = gt
 
