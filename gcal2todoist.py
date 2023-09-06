@@ -215,7 +215,7 @@ def add_task(event):
         atendee.email: atendee.response_status for atendee in event.attendees
     }
 
-    for date_ in dates:
+    for date_, duration, i in dates:
         due_date = parse(str(date_))
 
         if type(date_) is datetime.datetime:
@@ -223,7 +223,13 @@ def add_task(event):
             task_date = {"due_date": date}
         else:
             date = str(date_)
-            task_date = {"due_datetime": date}
+            task_date = {
+                "due_datetime": date,
+            }
+
+        if duration:
+            task_date["duration"] = duration
+            task_date["duration_unit"] = "minute"
 
         if due_date.date() < datetime.datetime.today().date():
             continue
@@ -326,7 +332,7 @@ def clear_yesterday_tasks(event):
 def clear_unattached_task(event, task_id, due_date):
     api = cf.todoist_api
 
-    dates = [str(x) for x in generate_desired_dates(event)]
+    dates = [str(x) for x, _, _ in generate_desired_dates(event)]
 
     if due_date not in dates:
         logger.info(f"Removing unattached task from {event.summary}")
