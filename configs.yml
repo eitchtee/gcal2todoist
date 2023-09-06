@@ -17,3 +17,7 @@ task_suffix: "*"
 
 # Any event with this label set by you will be completed and not added again
 completed_label: "Done"
+
+# Will fetch this number of days in advance. The higher this number
+# the higher the amount of api calls, watch out for rate limiting
+days_to_fetch: 7

@@ -45,6 +45,7 @@ class Configs:
         self.task_prefix = None
         self.task_suffix = None
         self.completed_label = None
+        self.days_to_fetch = None
 
         self.get_configs()
 
@@ -66,7 +67,7 @@ class Configs:
                 time_min=datetime.datetime.today(),
                 time_max=datetime.datetime.today()
                 + datetime.timedelta(
-                    days=7,
+                    days=self.days_to_fetch,
                 ),
                 single_events=True,
             )
@@ -99,6 +100,7 @@ class Configs:
         self.task_prefix = data.get("task_prefix", "* 🗓️ ")
         self.task_suffix = data.get("task_suffix", "")
         self.completed_label = data.get("completed_label")
+        self.days_to_fetch = data.get("days_to_fetch")
 
 
 def fetch_project_id(project_name, parent_id=None):
