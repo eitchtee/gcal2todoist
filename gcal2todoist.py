@@ -36,6 +36,72 @@ class GracefulKiller:
         self.kill_now = True
 
 
+class Calendar:
+    def __init__(self, todoist_project_id, gcal_id):
+        self.todoist_project_id = todoist_project_id
+        self.gcal_id = gcal_id
+        self.events = []
+
+
+def generate_date_range(event: Event):
+    date_range = []
+
+    start = 0  # Range start
+    end = (event.end - event.start).days  # Range end
+
+    if end >= 1:
+        end += 1  # Catch multi-day events
+
+    for x in range(start, end):
+        if x == start:
+            start_date = event.start + datetime.timedelta(days=x)
+        else:
+            start_date = event.start + datetime.timedelta(days=x)
+            if type(event.start) == datetime.datetime:
+                # if a multi-day event start and end times, set the start time to midnight on the second day forward
+                start_date = start_date.replace(hour=0, minute=0, second=0)
+
+        if start_date >= event.end:
+            continue
+
+        duration = event.end - start_date
+        duration = int(duration.total_seconds() / 60)
+
+        if duration > 1440:  # Todoist tasks has a maximum duration of 24 hours
+            duration = None
+
+        date_range.append((start_date, duration, x))
+
+    if not date_range:
+        duration = event.end - event.start
+        duration = int(duration.total_seconds() / 60)
+        if duration >= 1440:  # Todoist tasks has a maximum duration of 24 hours
+            duration = None
+        date_range.append((event.start, duration, 0))
+
+    return date_range
+
+
+def is_event_on_db(db, event_id, date_string: str, index: int):
+    return (
+        True
+        if db.search(
+            (Query().event_id == event_id)
+            & (Query().due_string == str(date_string))
+            & (Query().index == index)
+        )
+        else None
+    )
+
+
+def get_event_on_db(db, event_id, date_string: str, index: int):
+    return db.search(
+        (Query().event_id == event_id)
+        & (Query().due_string == str(date_string))
+        & (Query().index == index)
+    )[0]
+
+
 class Gcal2Todoist:
     def __init__(self):
         self.mother_project_name = None
@@ -52,7 +118,7 @@ class Gcal2Todoist:
         self.todoist_token = None
         self.todoist = None
 
-        self.calendar_projects = []
+        self.calendars = []
         self.events = []
         self.db = None
 
@@ -113,16 +179,16 @@ class Gcal2Todoist:
         ]:
             gcal_calendar_id = self.todoist.get_comments(project_id=project)[0].content
 
-            self.calendar_projects.append(
-                {"gcal_id": gcal_calendar_id, "todoist_id": project}
+            self.calendars.append(
+                Calendar(todoist_project_id=project, gcal_id=gcal_calendar_id)
             )
 
     def refresh_calendar(self):
         self.events = []
 
-        for calendar in self.calendar_projects:
+        for calendar in self.calendars:
             gc = GoogleCalendar(
-                calendar["gcal_id"],
+                calendar.gcal_id,
                 credentials_path=os.path.join(
                     os.path.dirname(__file__), ".credentials", "credentials.json"
                 ),
@@ -135,80 +201,101 @@ class Gcal2Todoist:
                 single_events=True,
             )
 
-            calendar_project = calendar["todoist_id"]
-            logger.info(f'Getting calendar: "{calendar}"')
-            events = list(gc)
+            logger.info(f'Getting calendar: "{calendar.gcal_id}"')
 
-            for event in events:
-                setattr(event, "calendar_project", calendar_project)
-                setattr(event, "calendar_name", calendar["gcal_id"])
-
-            self.events += events
-
-    def clear_yesterday_tasks(self, event):
-        api = self.todoist
-
-        tasks = self.db.search(Query().event_id == event.id)
-
-        for i, task in enumerate(tasks):
-            due_date = parse(task["due_string"])
-            if due_date.date() < datetime.datetime.today().date():
-                logger.info(f'Removing stale "{i}" task from "{event.summary}"')
-                api.close_task(task["task_id"])
-                self.db.remove(Query().task_id == task["task_id"])
-
-    def clear_unattached_task(self, event, task_id, due_date):
-        api = self.todoist
-
-        dates = [
-            str(x) for x, _, _ in Task(event=event, gt=self).generate_desired_dates()
-        ]
-
-        if due_date not in dates:
-            logger.info(f"Removing unattached task from {event.summary}")
-            api.delete_task(task_id)
-            self.db.remove(
-                (Query().task_id == task_id) & (Query().due_string == due_date)
-            )
-            return True
-
-        return False
-
-    def clear_non_existant_task(self):
-        all_event_ids = [x.id for x in self.events]
-        for entry in self.db:
-            task_id = entry.get("task_id")
-            note_id = entry.get("note_id")
-            event_id = entry.get("event_id")
-
-            if entry["event_id"] not in all_event_ids:
-                logger.info(f"Deleting non-existant event-task {task_id}")
-                self.todoist.delete_task(task_id)
-
-                self.db.remove(Query().event_id == event_id)
-                continue  # Skip updating as the event is over
-
-            event = [x for x in self.events if x.id == event_id][0]
-
-            if self.clear_unattached_task(event, task_id, entry.get("due_string")):
-                continue  # Skip updating as the task was deleted
+            calendar.events += list(gc)
 
     def run(self):
-        for event in self.events:
-            Task(event=event, gt=self).add()
-            self.clear_yesterday_tasks(event)
+        for calendar in self.calendars:
+            existing_tasks = self.todoist.get_tasks(
+                project_id=calendar.todoist_project_id
+            )
 
-        self.clear_non_existant_task()
+            for event in calendar.events:
+                date_range = generate_date_range(event)
+                for date, duration, index in date_range:
+                    if (
+                        type(date) is datetime.date
+                        and date < datetime.datetime.today().date()
+                    ) or (
+                        type(date) is datetime.datetime
+                        and date < datetime.datetime.now().replace(tzinfo=date.tzinfo)
+                    ):
+                        continue  # Skip event dates older than today
+
+                    logger.info(f"Handling task: {event.summary} [{index}]")
+
+                    if is_event_on_db(
+                        db=self.db, event_id=event.id, date_string=date, index=index
+                    ):
+                        event_on_db = get_event_on_db(
+                            db=self.db, event_id=event.id, date_string=date, index=index
+                        )
+
+                        event_on_todoist = list(
+                            filter(
+                                lambda obj: obj.id == event_on_db.get("task_id"),
+                                existing_tasks,
+                            )
+                        )
+
+                        if event_on_todoist:
+                            event_on_todoist = event_on_todoist[0]
+
+                        task = Task(
+                            event=event,
+                            gt=self,
+                            gcal_id=calendar.gcal_id,
+                            todoist_project_id=calendar.todoist_project_id,
+                            date=date,
+                            duration=duration,
+                            index=index,
+                            existing_task=event_on_todoist,
+                        )
+
+                    else:
+                        ...
+
+                    # Task(
+                    #     event=event,
+                    #     gt=self,
+                    #     gcal_id=calendar.gcal_id,
+                    #     todoist_project_id=calendar.todoist_project_id,
+                    #     date=date,
+                    #     duration=duration,
+                    #     index=index,
+                    # ).add()
+                # self.clear_yesterday_tasks(event)
+
+        # self.clear_non_existant_task()
 
 
 class Task:
-    def __init__(self, event: Event, gt: Gcal2Todoist):
+    def __init__(
+        self,
+        event: Event,
+        date,
+        duration: int,
+        index: int,
+        gt: Gcal2Todoist,
+        gcal_id: str,
+        todoist_project_id: str,
+        existing_task=None,
+    ):
         self.event = event
         self.g2t = gt
 
         self.task_name = self.generate_task_name()
         self.note = self.generate_note()
-        self.dates = self.generate_desired_dates()
+
+        self.date = date
+        self.duration = duration
+        self.index = index
+
+        self.gcal_id = gcal_id
+        self.todoist_project_id = todoist_project_id
+
+        self.existing_task = existing_task
 
     def generate_task_name(self):
         return (
@@ -255,155 +342,45 @@ class Task:
 
         return note
 
-    def generate_desired_dates(self):
-        date_range = []
-
-        start = 0  # Range start
-        end = (self.event.end - self.event.start).days  # Range end
-
-        if end >= 1:
-            end += 1  # Catch multi-day events
-
-        for x in range(start, end):
-            if x == start:
-                start_date = self.event.start + datetime.timedelta(days=x)
-            else:
-                start_date = self.event.start + datetime.timedelta(days=x)
-                if type(self.event.start) == datetime.datetime:
-                    # if a multi-day event start and end times, set the start time to midnight on the second day forward
-                    start_date = start_date.replace(hour=0, minute=0, second=0)
-
-            if start_date >= self.event.end:
-                continue
-
-            duration = self.event.end - start_date
-            duration = int(duration.total_seconds() / 60)
-
-            if duration > 1440:  # Todoist tasks has a maximum duration of 24 hours
-                duration = None
-
-            date_range.append((start_date, duration, x))
-
-        if not date_range:
-            duration = self.event.end - self.event.start
-            duration = int(duration.total_seconds() / 60)
-            if duration >= 1440:  # Todoist tasks has a maximum duration of 24 hours
-                duration = None
-            date_range.append((self.event.start, duration, 0))
-
-        return date_range
+    def update_task(self):
+        ...
 
     def add(self):
-        logger.info(f"Handling task: {self.event.summary}")
+        search = Query()
 
         event_atendees = {
             atendee.email: atendee.response_status for atendee in self.event.attendees
         }
 
-        for date_, duration, i in self.dates:
-            due_date = parse(str(date_))
+        if type(self.date) is datetime.datetime:
+            date = str(self.date.astimezone(datetime.timezone.utc))
+            task_date = {"due_date": date}
+        else:
+            date = str(self.date)
+            task_date = {
+                "due_datetime": date,
+            }
 
-            if due_date.date() < datetime.datetime.today().date():
-                continue
+        if self.duration:
+            task_date["duration"] = self.duration
+            task_date["duration_unit"] = "minute"
 
-            if type(date_) is datetime.datetime:
-                date = str(date_.astimezone(datetime.timezone.utc))
-                task_date = {"due_date": date}
-            else:
-                date = str(date_)
-                task_date = {
-                    "due_datetime": date,
-                }
-
-            if duration:
-                task_date["duration"] = duration
-                task_date["duration_unit"] = "minute"
-
-            search = Query()
-
-            if not self.g2t.db.search(
-                (search.event_id == self.event.id)
-                & (search.due_string == str(date_))
-                & (search.index == i)
-            ):  # Event does not exist on DB
-                if not self.event.attendees or (
-                    self.event.attendees
-                    and self.event.calendar_name in event_atendees.keys()
-                    and event_atendees[self.event.calendar_name]
-                    in ["accepted", "needsAction", "tentative"]
-                ):
-                    logger.info(f"Adding event task: {self.event.summary}")
-                    try:
-                        item = self.g2t.todoist.add_task(
-                            content=self.task_name,
-                            project_id=self.event.calendar_project,
-                            labels=[self.g2t.label],
-                            **task_date,
-                        )
-
-                        comment = self.g2t.todoist.add_comment(
-                            content=self.note, task_id=item.id
-                        )
-                    except HTTPError:
-                        continue
-
-                    self.g2t.db.insert(
-                        {
-                            "event_id": self.event.id,
-                            "task_id": item.id,
-                            "note_id": comment.id,
-                            "due_string": str(date_),
-                            "index": i,
-                        }
-                    )
-            else:
-                search = Query()
-                result = self.g2t.db.search(
-                    (search.event_id == self.event.id)
-                    & (search.due_string == str(date_))
-                    & (search.index == i)
-                )[0]
-                task_id = result["task_id"]
-                note_id = result["note_id"]
+        if not self.g2t.db.search(
+            (search.event_id == self.event.id)
+            & (search.due_string == str(self.date))
+            & (search.index == self.index)
+        ):  # Event does not exist on DB
+            if not self.event.attendees or (
+                self.event.attendees
+                and self.gcal_id in event_atendees.keys()
+                and event_atendees[self.gcal_id]
+                in ["accepted", "needsAction", "tentative"]
+            ):
+                logger.info(f"Adding event task: {self.event.summary} [{self.index}]")
                 try:
-                    task_obj = self.g2t.todoist.get_task(task_id)
-
-                except HTTPError as err:
-                    if err.response.status_code == 404:
-                        task_obj = None
-                    else:
-                        continue
-
-                if task_obj:
-                    item = self.g2t.todoist.update_task(
-                        task_id=task_id,
-                        content=self.task_name,
-                        project_id=self.event.calendar_project,
-                        labels=[self.g2t.label],
-                        **task_date,
-                    )
-
-                    comment = self.g2t.todoist.update_comment(
-                        comment_id=note_id, content=self.note
-                    )
-
-                    self.g2t.db.update(
-                        {
-                            "event_id": self.event.id,
-                            "task_id": item["id"],
-                            "note_id": comment["id"],
-                            "due_string": str(date_),
-                            "index": i,
-                        },
-                        (search.event_id == self.event.id)
-                        & (search.due_string == str(date_))
-                        & (search.index == i),
-                    )
-
-                if not task_obj:
                     item = self.g2t.todoist.add_task(
                         content=self.task_name,
-                        project_id=self.event.calendar_project,
+                        project_id=self.todoist_project_id,
                         labels=[self.g2t.label],
                         **task_date,
                     )
@@ -411,40 +388,105 @@ class Task:
                     comment = self.g2t.todoist.add_comment(
                         content=self.note, task_id=item.id
                     )
+                except HTTPError:
+                    return
 
-                    self.g2t.db.update(
-                        {
-                            "event_id": self.event.id,
-                            "task_id": item.id,
-                            "note_id": comment.id,
-                            "due_string": str(date_),
-                            "index": i,
-                        },
-                        (search.event_id == self.event.id)
-                        & (search.due_string == str(date_))
-                        & (search.index == i),
-                    )
+                self.g2t.db.insert(
+                    {
+                        "event_id": self.event.id,
+                        "task_id": item.id,
+                        "note_id": comment.id,
+                        "due_string": str(self.date),
+                        "index": self.index,
+                    }
+                )
+        else:
+            search = Query()
+            result = self.g2t.db.search(
+                (search.event_id == self.event.id)
+                & (search.due_string == str(self.date))
+                & (search.index == self.index)
+            )[0]
+            task_id = result["task_id"]
+            note_id = result["note_id"]
+            try:
+                task_obj = self.g2t.todoist.get_task(task_id)
 
-                elif (
-                    self.g2t.completed_label in task_obj.labels
-                    and not task_obj.is_completed
-                ):
-                    logger.info(f"Completing task by request: {self.event.summary}")
-                    self.g2t.todoist.close_task(task_id)
+            except HTTPError as err:
+                if err.response.status_code == 404:
+                    task_obj = None
+                else:
+                    return
 
-                if (
-                    self.event.attendees
-                    and self.event.calendar_name in event_atendees.keys()
-                    and event_atendees[self.event.calendar_name]
-                    not in ["accepted", "needsAction", "tentative"]
-                ):
-                    logger.info(
-                        f"Deleting not accepted event task: {self.event.summary}"
-                    )
-                    self.g2t.todoist.delete_task(task_id)
-                    self.g2t.db.remove(
-                        (search.task_id == task_id) & (search.event_id == self.event.id)
-                    )
+            if task_obj:
+                item = self.g2t.todoist.update_task(
+                    task_id=task_id,
+                    content=self.task_name,
+                    project_id=self.todoist_project_id,
+                    labels=[self.g2t.label],
+                    **task_date,
+                )
+
+                comment = self.g2t.todoist.update_comment(
+                    comment_id=note_id, content=self.note
+                )
+
+                self.g2t.db.update(
+                    {
+                        "event_id": self.event.id,
+                        "task_id": item["id"],
+                        "note_id": comment["id"],
+                        "due_string": str(self.date),
+                        "index": self.index,
+                    },
+                    (search.event_id == self.event.id)
+                    & (search.due_string == str(self.date))
+                    & (search.index == self.index),
+                )
+
+            if not task_obj:
+                item = self.g2t.todoist.add_task(
+                    content=self.task_name,
+                    project_id=self.todoist_project_id,
+                    labels=[self.g2t.label],
+                    **task_date,
+                )
+
+                comment = self.g2t.todoist.add_comment(
+                    content=self.note, task_id=item.id
+                )
+
+                self.g2t.db.update(
+                    {
+                        "event_id": self.event.id,
+                        "task_id": item.id,
+                        "note_id": comment.id,
+                        "due_string": str(self.date),
+                        "index": self.index,
+                    },
+                    (search.event_id == self.event.id)
+                    & (search.due_string == str(self.date))
+                    & (search.index == self.index),
+                )
+
+            elif (
+                self.g2t.completed_label in task_obj.labels
+                and not task_obj.is_completed
+            ):
+                logger.info(f"Completing task by request: {self.event.summary}")
+                self.g2t.todoist.close_task(task_id)
+
+            if (
+                self.event.attendees
+                and self.gcal_id in event_atendees.keys()
+                and event_atendees[self.gcal_id]
+                not in ["accepted", "needsAction", "tentative"]
+            ):
+                logger.info(f"Deleting not accepted event task: {self.event.summary}")
+                self.g2t.todoist.delete_task(task_id)
+                self.g2t.db.remove(
+                    (search.task_id == task_id) & (search.event_id == self.event.id)
+                )
 
 
 if __name__ == "__main__":
