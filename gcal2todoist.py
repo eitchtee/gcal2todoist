@@ -164,13 +164,40 @@ def generate_task_name(title):
 
 
 def generate_desired_dates(event):
-    date_range = [
-        event.start + datetime.timedelta(days=x)
-        for x in range(0, (event.end - event.start).days)
-    ]
+    date_range = []
+
+    start = 0  # Range start
+    end = (event.end - event.start).days  # Range end
+
+    if end >= 1:
+        end += 1  # Catch multi-day events
+
+    for x in range(start, end):
+        if x == start:
+            start_date = event.start + datetime.timedelta(days=x)
+        else:
+            start_date = event.start + datetime.timedelta(days=x)
+            if type(event.start) == datetime.datetime:
+                # if a multi-day event start and end times, set the start time to midnight on the second day forward
+                start_date = start_date.replace(hour=0, minute=0, second=0)
+
+        if start_date >= event.end:
+            continue
+
+        duration = event.end - start_date
+        duration = int(duration.total_seconds() / 60)
+
+        if duration > 1440:  # Todoist tasks has a maximum duration of 24 hours
+            duration = None
+
+        date_range.append((start_date, duration, x))
 
     if not date_range:
-        date_range.append(event.start)
+        duration = event.end - event.start
+        duration = int(duration.total_seconds() / 60)
+        if duration >= 1440:  # Todoist tasks has a maximum duration of 24 hours
+            duration = None
+        date_range.append((event.start, duration, 0))
 
     return date_range
 
