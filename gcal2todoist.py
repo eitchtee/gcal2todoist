@@ -380,7 +380,7 @@ def main():
     for event in calendar:
         add_task(event)
         clear_yesterday_tasks(event)
-        sleep(5)  # Try to skip rate limiting
+        sleep(1)  # Try to skip rate limiting
 
     all_event_ids = [x.id for x in calendar]
     for entry in db:
@@ -403,7 +403,7 @@ def main():
         update_task_name(event, task_id)
         update_task_note(event, note_id)
 
-        sleep(5)  # Try to skip rate limiting
+        sleep(1)  # Try to skip rate limiting
 
     logger.info("Commiting final changes...")
 
