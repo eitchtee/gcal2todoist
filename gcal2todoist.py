@@ -241,9 +241,9 @@ class Gcal2Todoist:
                                 existing_tasks,
                             )
                         )
-
-                        if event_on_todoist:
-                            event_on_todoist = event_on_todoist[0]
+                        event_on_todoist = (
+                            event_on_todoist[0] if event_on_todoist else None
+                        )
 
                         task = Task(
                             event=event,
@@ -253,21 +253,20 @@ class Gcal2Todoist:
                             date=date,
                             duration=duration,
                             index=index,
-                            existing_task=event_on_todoist,
+                            task_on_todoist=event_on_todoist,
+                            task_on_db=event_on_db,
                         )
 
                     else:
-                        ...
-
-                    # Task(
-                    #     event=event,
-                    #     gt=self,
-                    #     gcal_id=calendar.gcal_id,
-                    #     todoist_project_id=calendar.todoist_project_id,
-                    #     date=date,
-                    #     duration=duration,
-                    #     index=index,
-                    # ).add()
+                        task = Task(
+                            event=event,
+                            gt=self,
+                            gcal_id=calendar.gcal_id,
+                            todoist_project_id=calendar.todoist_project_id,
+                            date=date,
+                            duration=duration,
+                            index=index,
+                        )
                 # self.clear_yesterday_tasks(event)
 
         # self.clear_non_existant_task()
@@ -283,7 +282,8 @@ class Task:
         gt: Gcal2Todoist,
         gcal_id: str,
         todoist_project_id: str,
-        existing_task=None,
+        task_on_todoist=None,
+        task_on_db=None,
     ):
         self.event = event
         self.g2t = gt
@@ -298,7 +298,8 @@ class Task:
         self.gcal_id = gcal_id
         self.todoist_project_id = todoist_project_id
 
-        self.existing_task = existing_task
+        self.task_on_todoist = task_on_todoist
+        self.task_on_db = task_on_db
 
     def generate_task_name(self):
         return (
@@ -318,10 +319,10 @@ class Task:
             "tentative": "🟡",
         }
 
-        if location:
-            note.append(f"📍 {location}")
         if hangout_link:
             note.append(f"📞 {hangout_link}")
+        if location:
+            note.append(f"📍 {location}")
         if description:
             note.append(f"📝 {markdownify(description)}")
         if attendees:
@@ -339,16 +340,13 @@ class Task:
                     result.append(" - ".join(display_line) + "\n")
             note.append("".join(result))
         if len(note) == 0:
-            note.append("❌")
+            note.append("")
 
         note = "\n\n".join(note).strip()
 
         return note
 
-    def update_task(self):
-        ...
-
-    def add(self):
+    def add_or_update(self):
         search = Query()
 
         event_atendees = {
@@ -383,14 +381,12 @@ class Task:
                 try:
                     item = self.g2t.todoist.add_task(
                         content=self.task_name,
+                        description=self.note,
                         project_id=self.todoist_project_id,
                         labels=[self.g2t.label],
                         **task_date,
                     )
-
-                    comment = self.g2t.todoist.add_comment(
-                        content=self.note, task_id=item.id
-                    )
+                    self.task_on_todoist = item
                 except HTTPError:
                     return
 
@@ -398,7 +394,6 @@ class Task:
                     {
                         "event_id": self.event.id,
                         "task_id": item.id,
-                        "note_id": comment.id,
                         "due_string": str(self.date),
                         "index": self.index,
                     }
@@ -411,7 +406,6 @@ class Task:
                 & (search.index == self.index)
             )[0]
             task_id = result["task_id"]
-            note_id = result["note_id"]
             try:
                 task_obj = self.g2t.todoist.get_task(task_id)
 
@@ -421,24 +415,24 @@ class Task:
                 else:
                     return
 
-            if task_obj:
+            if task_obj and (
+                task_obj.content != self.task_name
+                or task_obj.description != self.note
+                or task_obj.duration
+            ):
                 item = self.g2t.todoist.update_task(
                     task_id=task_id,
+                    description=self.note,
                     content=self.task_name,
                     project_id=self.todoist_project_id,
                     labels=[self.g2t.label],
                     **task_date,
                 )
 
-                comment = self.g2t.todoist.update_comment(
-                    comment_id=note_id, content=self.note
-                )
-
                 self.g2t.db.update(
                     {
                         "event_id": self.event.id,
                         "task_id": item["id"],
-                        "note_id": comment["id"],
                         "due_string": str(self.date),
                         "index": self.index,
                     },
@@ -450,20 +444,16 @@ class Task:
             if not task_obj:
                 item = self.g2t.todoist.add_task(
                     content=self.task_name,
+                    description=self.note,
                     project_id=self.todoist_project_id,
                     labels=[self.g2t.label],
                     **task_date,
-                )
-
-                comment = self.g2t.todoist.add_comment(
-                    content=self.note, task_id=item.id
                 )
 
                 self.g2t.db.update(
                     {
                         "event_id": self.event.id,
                         "task_id": item.id,
-                        "note_id": comment.id,
                         "due_string": str(self.date),
                         "index": self.index,
                     },
