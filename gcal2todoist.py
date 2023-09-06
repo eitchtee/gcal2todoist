@@ -115,6 +115,8 @@ class Gcal2Todoist:
         self.task_suffix = None
         self.completed_label = None
 
+        self.days_to_fetch = None
+
         self.todoist_token = None
         self.todoist = None
 
@@ -144,6 +146,7 @@ class Gcal2Todoist:
         self.task_prefix = data.get("task_prefix", "* 🗓️ ")
         self.task_suffix = data.get("task_suffix", "")
         self.completed_label = data.get("completed_label")
+        self.days_to_fetch = data.get("days_to_fetch")
 
         self.db = TinyDB(os.path.join(os.path.dirname(__file__), "events.json"))
 
@@ -196,7 +199,7 @@ class Gcal2Todoist:
                 time_min=datetime.datetime.today(),
                 time_max=datetime.datetime.today()
                 + datetime.timedelta(
-                    days=7,
+                    days=self.days_to_fetch,
                 ),
                 single_events=True,
             )
