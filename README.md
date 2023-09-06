@@ -32,6 +32,7 @@ You will need:
 Please refer to [Google Calendar Simple API's docs](https://google-calendar-simple-api.readthedocs.io/en/latest/getting_started.html#credentials) for a guide on how to create the ``.credentials`` folder
 
 ### configs.yml
+Rename `configs.yml.example` to `configs.yml` and edit accordingly
 ```yaml
 todoist_api_token: "YOUR_TODOIST_TOKEN_GENERATED_ON_THE_WEB_CLIENT"
 default_project: "Events" # Name of the project you want your tasks to get added to. It will be created if it doesn't exist.
@@ -44,6 +45,10 @@ run_every: 600 # seconds
 log_level: "INFO" # Currently only INFO level logs are avaliable.
 
 completed_label: "Done" # Add this label to a event to complete it before it's given time (useful for full day events)
+
+# Will fetch this number of days in advance. The higher this number
+# the higher the amount of api calls, watch out for rate limiting
+days_to_fetch: 7
 ```
 
 
