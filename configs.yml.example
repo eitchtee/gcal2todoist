@@ -6,14 +6,10 @@ label: "Event"
 keep_running: false
 run_every: 600 # seconds
 
-calendars:
-  - id: "primary"
-    name: "youremail@gmail.com"
-
 log_level: "INFO"
 
-task_prefix: "* 🗓️ *"
-task_suffix: "*"
+task_prefix: "* 🗓️ ```"
+task_suffix: "```"
 
 # Any event with this label set by you will be completed and not added again
 completed_label: "Done"

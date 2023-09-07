@@ -1,17 +1,20 @@
 import signal
-from time import sleep
+from time import sleep, gmtime
 import datetime
 import os
 import logging
+import calendar
 
-from requests import HTTPError
+from helpers.db import DB
+
 from todoist_api_python.api import TodoistAPI
 from gcsa.google_calendar import GoogleCalendar
+from gcsa.event import Event
 import yaml
-from tinydb import TinyDB, Query
 from dateutil.parser import parse
 
 from markdownify import markdownify
+
 
 # Initialize logger handle
 logging.getLogger("googleapiclient").setLevel(logging.CRITICAL)
@@ -30,59 +33,28 @@ class GracefulKiller:
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-    def exit_gracefully(self, *_):
+    def exit_gracefully(self, *args):
         self.kill_now = True
 
 
-class Configs:
+class Config:
     def __init__(self):
-        self.token = None
-        self.project = None
+        self.mother_project_name = None
+        self.mother_project_id = None
+
         self.label = None
         self.keep_running = None
         self.run_every = None
-        self.calendars = None
+
         self.task_prefix = None
         self.task_suffix = None
         self.completed_label = None
+
         self.days_to_fetch = None
 
-        self.get_configs()
+        self.todoist_token = None
+        self.todoist = None
 
-        self.todoist_api = TodoistAPI(self.token)
-        self.calendar = []
-        self.db = TinyDB(os.path.join(os.path.dirname(__file__), "events.json"))
-
-        self.project_id = None
-
-    def refresh_calendar(self):
-        self.calendar = []
-        for calendar in self.calendars:
-            gc = GoogleCalendar(
-                calendar["gcal_id"],
-                credentials_path=os.path.join(
-                    os.path.dirname(__file__), ".credentials", "credentials.json"
-                ),
-            ).get_events(
-                time_min=datetime.datetime.today(),
-                time_max=datetime.datetime.today()
-                + datetime.timedelta(
-                    days=self.days_to_fetch,
-                ),
-                single_events=True,
-            )
-
-            calendar_project = calendar["todoist_id"]
-            logger.info(f'Getting calendar: "{calendar}"')
-            events = list(gc)
-
-            for event in events:
-                setattr(event, "calendar_project", calendar_project)
-                setattr(event, "calendar_name", calendar["gcal_id"])
-
-            self.calendar += events
-
-    def get_configs(self):
         configs_path = os.path.join(os.path.dirname(__file__), "configs.yml")
 
         with open(configs_path, encoding="utf8") as file:
@@ -91,81 +63,225 @@ class Configs:
         log_level = data.get("log_level", "INFO")
         logger.setLevel(log_level)
 
-        self.token = data.get("todoist_api_token")
-        self.project = data.get("default_project")
+        self.todoist_token = data.get("todoist_api_token")
+        self.mother_project_name = data.get("default_project")
         self.label = data.get("label")
         self.keep_running = data.get("keep_running")
         self.run_every = data.get("run_every")
-        # self.calendars = data.get("calendars", ["primary"])
         self.task_prefix = data.get("task_prefix", "* 🗓️ ")
         self.task_suffix = data.get("task_suffix", "")
         self.completed_label = data.get("completed_label")
         self.days_to_fetch = data.get("days_to_fetch")
 
+        if not self.todoist_token:
+            raise Exception("Todoist token not set.")
 
-def fetch_project_id(project_name, parent_id=None):
-    logger.info("Fetching desired project-id")
-    matching_projects = [
-        project
-        for project in cf.todoist_api.get_projects()
-        if project.name == project_name
-    ]
-    if len(matching_projects) >= 1:
-        proj_id = matching_projects[0].id
-    else:
-        new_project = cf.todoist_api.add_project(project_name, parent_id=parent_id)
-        proj_id = new_project.id
+        self.todoist = TodoistAPI(self.todoist_token)
 
-    logger.info(f"Project-id found: {proj_id}")
-    return proj_id
+        self.fetch_mother_project_id()
 
+    def fetch_mother_project_id(self):
+        logger.info("Fetching mother project-id")
+        matching_projects = [
+            project
+            for project in self.todoist.get_projects()
+            if project.name == self.mother_project_name
+        ]
+        if len(matching_projects) >= 1:
+            proj_id = matching_projects[
+                0
+            ].id  # Always return the first project listed by Todoist
+        else:
+            new_project = self.todoist.add_project(self.mother_project_name)
+            proj_id = new_project.id
 
-def generate_note(event):
-    note = []
-    location = event.location
-    description = event.description
-    hangout_link = event.other.get("hangoutLink")
-    attendees = event.attendees
-    attendee_status = {
-        "accepted": "🟢",
-        "declined": "🔴",
-        "needsAction": "⚫",
-        "tentative": "🟡",
-    }
+        logger.info(f"Mother project-id found: {proj_id}")
 
-    if location:
-        note.append(f"📍 {location}")
-    if hangout_link:
-        note.append(f"📞 {hangout_link}")
-    if description:
-        note.append(f"📝 {markdownify(description)}")
-    if attendees:
-        result = ["👥 Convidados:\n"]
+        self.mother_project_id = proj_id
 
-        for attendee in attendees:
-            display_line = [attendee_status[attendee.response_status]]
+    def get_calendars(self):
+        for todoist_project_id in [
+            x.id
+            for x in self.todoist.get_projects()
+            if x.parent_id == self.mother_project_id and x.comment_count >= 1
+        ]:
+            gcal_calendar_id = self.todoist.get_comments(project_id=todoist_project_id)[
+                0
+            ].content
 
-            if attendee.display_name:
-                display_line.append(attendee.display_name)
-            if attendee.email:
-                display_line.append(attendee.email)
+            yield todoist_project_id, gcal_calendar_id
 
-            if len(display_line) >= 2:
-                result.append(" - ".join(display_line) + "\n")
-        note.append("".join(result))
-    if len(note) == 0:
-        note.append("❌")
+    def get_calendar_events(self, gcal_id):
+        gc = GoogleCalendar(
+            gcal_id,
+            credentials_path=os.path.join(
+                os.path.dirname(__file__), ".credentials", "credentials.json"
+            ),
+        ).get_events(
+            time_min=datetime.datetime.today(),
+            time_max=datetime.datetime.today()
+            + datetime.timedelta(
+                days=self.days_to_fetch,
+            ),
+            single_events=True,
+        )
 
-    note = "\n\n".join(note).strip()
+        logger.info(f'Getting calendar: "{gcal_id}"')
 
-    return note
-
-
-def generate_task_name(title):
-    return f"{cf.task_prefix}{title.strip()}{cf.task_suffix}"
+        for event in list(gc):
+            yield event
 
 
-def generate_desired_dates(event):
+class Task:
+    def __init__(
+        self,
+        event: Event,
+        date,
+        duration: int,
+        index: int,
+        gcal_id: str,
+        todoist_project_id: str,
+        todoist_id: str = None,
+    ):
+        self.event = event
+
+        self.task_name = self.generate_task_name()
+        self.note = self.generate_note()
+
+        self.date = date
+        self.duration = duration
+        self.index = index
+
+        self.gcal_id = gcal_id
+        self.todoist_project_id = todoist_project_id
+
+        self.todoist_id = todoist_id
+
+    def generate_task_name(self):
+        return f"{configs.task_prefix}{self.event.summary.strip()}{configs.task_suffix}"
+
+    def generate_note(self):
+        note = []
+        location = self.event.location
+        description = self.event.description
+        hangout_link = self.event.other.get("hangoutLink")
+        attendees = self.event.attendees
+        attendee_status = {
+            "accepted": "🟢",
+            "declined": "🔴",
+            "needsAction": "⚫",
+            "tentative": "🟡",
+        }
+
+        if hangout_link:
+            note.append(f"📞 {hangout_link}")
+        if location:
+            note.append(f"📍 {location}")
+        if description:
+            note.append(f"📝 {markdownify(description)}")
+        if attendees:
+            result = ["👥 Convidados:\n"]
+
+            for attendee in attendees:
+                display_line = [attendee_status[attendee.response_status]]
+
+                if attendee.display_name:
+                    display_line.append(attendee.display_name)
+                if attendee.email:
+                    display_line.append(attendee.email)
+
+                if len(display_line) >= 2:
+                    result.append(" - ".join(display_line) + "\n")
+            note.append("".join(result))
+        if len(note) == 0:
+            note.append("")
+
+        note = "\n\n".join(note).strip()
+
+        return note
+
+    def generate_task_date(self):
+        if type(self.date) is datetime.datetime:
+            date = str(self.date.astimezone(datetime.timezone.utc))
+            task_date = {"due_date": date}
+        else:
+            date = str(self.date)
+            task_date = {
+                "due_datetime": date,
+            }
+
+        if self.duration:
+            task_date["duration"] = self.duration
+            task_date["duration_unit"] = "minute"
+
+        return task_date
+
+    def add(self):
+        task_date = self.generate_task_date()
+
+        task = configs.todoist.add_task(
+            content=self.task_name,
+            description=self.note,
+            project_id=self.todoist_project_id,
+            labels=[configs.label],
+            **task_date,
+        )
+
+        db.update_todoist_id(
+            todoist_id=task.id, event_id=self.event.event_id, event_index=self.index
+        )
+
+    def update(self, existing_tasks: list):
+        tasks_on_todoist = list(
+            filter(
+                lambda obj: obj.id == self.todoist_id,
+                existing_tasks,
+            )
+        )
+        task_on_todoist = tasks_on_todoist[0] if tasks_on_todoist else None
+
+        if task_on_todoist:
+            if (
+                configs.completed_label in task_on_todoist.labels
+                and not task_on_todoist.is_completed
+            ):
+                logger.info("- Forcefully completing labeled task")
+                configs.todoist.close_task(self.todoist_id)
+                db.update_todoist_status(
+                    completed=True, event_id=self.event.event_id, event_index=self.index
+                )
+
+            elif (
+                task_on_todoist.content != self.task_name
+                or task_on_todoist.description != self.note
+                or (
+                    type(self.date) is datetime.date
+                    and task_on_todoist.due.date
+                    and task_on_todoist.due.string != str(self.date)
+                )
+                or (
+                    type(self.date) is datetime.datetime
+                    and task_on_todoist.due.datetime
+                    and parse(task_on_todoist.due.datetime) != self.date
+                )
+            ):
+                logger.info("- Updating task")
+
+                task_date = self.generate_task_date()
+
+                configs.todoist.update_task(
+                    task_id=self.todoist_id,
+                    content=self.task_name,
+                    description=self.note,
+                    project_id=self.todoist_project_id,
+                    **task_date,
+                )
+
+        else:
+            self.add()
+
+
+def generate_date_range(event: Event):
     date_range = []
 
     start = 0  # Range start
@@ -204,265 +320,116 @@ def generate_desired_dates(event):
     return date_range
 
 
-def add_task(event):
-    api = cf.todoist_api
+def should_add_based_on_date(date, duration):
+    duration = duration if duration else 0
 
-    task = generate_task_name(event.summary)
-    note = generate_note(event)
-    dates = generate_desired_dates(event)
+    if (type(date) is datetime.date and date < datetime.datetime.today().date()) or (
+        type(date) is datetime.datetime
+        and date
+        < datetime.datetime.now().replace(tzinfo=date.tzinfo)
+        - datetime.timedelta(minutes=duration)
+    ):
+        return False
 
-    logger.info(f"Handling task: {event.summary}")
+    return True
 
+
+def should_add_based_on_event(event: Event, gcal_id):
     event_atendees = {
         atendee.email: atendee.response_status for atendee in event.attendees
     }
 
-    for date_, duration, i in dates:
-        due_date = parse(str(date_))
+    if (
+        event_atendees
+        and gcal_id in event_atendees.keys()
+        and event_atendees[gcal_id] not in ["accepted", "needsAction", "tentative"]
+    ):
+        return False
 
-        if type(date_) is datetime.datetime:
-            date = str(date_.astimezone(datetime.timezone.utc))
-            task_date = {"due_date": date}
-        else:
-            date = str(date_)
-            task_date = {
-                "due_datetime": date,
-            }
+    return True
 
-        if duration:
-            task_date["duration"] = duration
-            task_date["duration_unit"] = "minute"
 
-        if due_date.date() < datetime.datetime.today().date():
-            continue
+def delete_task(task_id):
+    configs.todoist.delete_task(task_id=task_id)
 
-        search = Query()
-        if not cf.db.search(
-            (search.event_id == event.id) & (search.due_string == str(date_))
-        ):
-            if not event.attendees or (
-                event.attendees
-                and event.calendar_name in event_atendees.keys()
-                and event_atendees[event.calendar_name]
-                in ["accepted", "needsAction", "tentative"]
-            ):
-                logger.info(f"Adding event task: {event.summary}")
-                try:
-                    item = api.add_task(
-                        content=task,
-                        project_id=event.calendar_project,
-                        labels=[cf.label],
-                        **task_date,
-                    )
 
-                    comment = api.add_comment(content=note, task_id=item.id)
-                except HTTPError:
-                    return
+def run():
+    run_id = calendar.timegm(gmtime())
+    logger.info(f"Run {run_id}")
 
-                cf.db.insert(
-                    {
-                        "event_id": event.id,
-                        "task_id": item.id,
-                        "note_id": comment.id,
-                        "due_string": str(date_),
-                    }
+    for todoist_project_id, gcal_id in configs.get_calendars():
+        existing_tasks = configs.todoist.get_tasks(project_id=todoist_project_id)
+
+        for event in configs.get_calendar_events(gcal_id=gcal_id):
+            for date, duration, index in generate_date_range(event):
+                logger.info(f"Handling task '{event.summary}'[{index}]")
+
+                if not should_add_based_on_event(event=event, gcal_id=gcal_id):
+                    logger.info("- Skipping")
+                    continue
+
+                if not should_add_based_on_date(date, duration=duration):
+                    logger.info("- Skipping")
+                    continue
+
+                db.insert_or_update_without_todoist(
+                    event_id=event.event_id,
+                    due_date=date,
+                    event_index=index,
+                    run_id=run_id,
                 )
-        else:
-            search = Query()
-            result = cf.db.search(
-                (search.event_id == event.id) & (search.due_string == str(date_))
-            )[0]
-            task_id = result["task_id"]
-            try:
-                task_obj = api.get_task(task_id)
-            except HTTPError as err:
-                if err.response.status_code == 404:
-                    task_obj = None
+
+                db_event = db.get_event(event_id=event.event_id, event_index=index)
+
+                if db_event and db_event.get("todoist_id"):
+                    if not db_event.get("completed"):
+                        existing_task = Task(
+                            event=event,
+                            date=date,
+                            duration=duration,
+                            index=index,
+                            gcal_id=gcal_id,
+                            todoist_project_id=todoist_project_id,
+                            todoist_id=db_event.get("todoist_id"),
+                        )
+                        existing_task.update(existing_tasks=existing_tasks)
+                    else:
+                        logger.info("- Task is considered done.")
+
                 else:
-                    return
+                    logger.info("- Adding task")
+                    new_task = Task(
+                        event=event,
+                        date=date,
+                        duration=duration,
+                        index=index,
+                        gcal_id=gcal_id,
+                        todoist_project_id=todoist_project_id,
+                    )
+                    new_task.add()
 
-            if not task_obj:
-                item = api.add_task(
-                    content=task,
-                    project_id=event.calendar_project,
-                    labels=[cf.label],
-                    **task_date,
-                )
+    logger.info("Starting cleanup")
 
-                comment = api.add_comment(content=note, task_id=item.id)
+    for entry in db.get_unattached_events(run_id=run_id):
+        if entry.get("todoist_id"):
+            delete_task(task_id=entry.get("todoist_id"))
 
-                cf.db.update(
-                    {
-                        "event_id": event.id,
-                        "task_id": item.id,
-                        "note_id": comment.id,
-                        "due_string": str(date_),
-                    },
-                    (search.event_id == event.id) & (search.due_string == str(date_)),
-                )
-
-            elif cf.completed_label in task_obj.labels and not task_obj.is_completed:
-                logger.info(f"Completing task by request: {event.summary}")
-                api.close_task(task_id)
-
-            if (
-                event.attendees
-                and event.calendar_name in event_atendees.keys()
-                and event_atendees[event.calendar_name]
-                not in ["accepted", "needsAction", "tentative"]
-            ):
-                logger.info(f"Deleting not accepted event task: {event.summary}")
-                api.delete_task(task_id)
-                cf.db.remove(
-                    (search.task_id == task_id) & ((search.event_id == event.id))
-                )
-
-
-def clear_yesterday_tasks(event):
-    api = cf.todoist_api
-
-    tasks = cf.db.search(Query().event_id == event.id)
-
-    for i, task in enumerate(tasks):
-        due_date = parse(task["due_string"])
-        if due_date.date() < datetime.datetime.today().date():
-            logger.info(f'Removing stale "{i}" task from "{event.summary}"')
-            api.close_task(task["task_id"])
-            cf.db.remove(Query().task_id == task["task_id"])
-
-
-def clear_unattached_task(event, task_id, due_date):
-    api = cf.todoist_api
-
-    dates = [str(x) for x, _, _ in generate_desired_dates(event)]
-
-    if due_date not in dates:
-        logger.info(f"Removing unattached task from {event.summary}")
-        api.delete_task(task_id)
-        cf.db.remove((Query().task_id == task_id) & (Query().due_string == due_date))
-        return True
-
-    return False
-
-
-def update_task_name(event, task_id):
-    title = generate_task_name(event.summary)
-    try:
-        item = cf.todoist_api.get_task(task_id)
-    except HTTPError:
-        return
-    cur_title = item.content if item else None
-    if cur_title and cur_title != title:
-        logger.info(f'Updating task name for: "{event.summary}"')
-        cf.todoist_api.update_task(task_id, content=title)
-
-
-def update_task_note(event, note_id):
-    api = cf.todoist_api
-    note_content = generate_note(event)
-
-    try:
-        note = api.get_comment(note_id)
-    except HTTPError:
-        return
-
-    cur_content = note.content if note else None
-    if cur_content and cur_content != note_content:
-        logger.info(f'Updating note for: "{event.summary}"')
-        cf.todoist_api.update_comment(comment_id=note_id, content=note_content)
-
-
-def main():
-    db = cf.db
-    api = cf.todoist_api
-    calendar = cf.calendar
-
-    for event in calendar:
-        add_task(event)
-        clear_yesterday_tasks(event)
-        sleep(1)  # Try to skip rate limiting
-
-    all_event_ids = [x.id for x in calendar]
-    for entry in db:
-        task_id = entry.get("task_id")
-        note_id = entry.get("note_id")
-        event_id = entry.get("event_id")
-
-        if entry["event_id"] not in all_event_ids:
-            logger.info(f"Deleting non-existant event-task {task_id}")
-            api.delete_task(task_id)
-
-            db.remove(Query().event_id == event_id)
-            continue  # Skip updating as the event is over
-
-        event = [x for x in cf.calendar if x.id == event_id][0]
-
-        if clear_unattached_task(event, task_id, entry.get("due_string")):
-            continue  # Skip updating as the task was deleted
-
-        update_task_name(event, task_id)
-        update_task_note(event, note_id)
-
-        sleep(1)  # Try to skip rate limiting
-
-    logger.info("Commiting final changes...")
+        db.delete_event(entry.doc_id)
 
 
 if __name__ == "__main__":
-    cf = Configs()
+    configs = Config()
+    db = DB()
+    killer = GracefulKiller()
+    while not killer.kill_now:
+        try:
+            run()
+        except Exception as e:
+            logger.error(e, exc_info=True)
 
-    if cf.keep_running:
-        killer = GracefulKiller()
-        while not killer.kill_now:
-            try:
-                cf.get_configs()
-
-                cf.project_id = fetch_project_id(cf.project)
-
-                calendar_projects = []
-                for project in [
-                    x.id
-                    for x in cf.todoist_api.get_projects()
-                    if x.parent_id == cf.project_id and x.comment_count >= 1
-                ]:
-                    gcal_calendar_id = cf.todoist_api.get_comments(project_id=project)[
-                        0
-                    ].content
-
-                    calendar_projects.append(
-                        {"gcal_id": gcal_calendar_id, "todoist_id": project}
-                    )
-
-                cf.calendars = calendar_projects
-
-                cf.refresh_calendar()
-
-                main()
-            except Exception as e:
-                logger.error(e, exc_info=True)
-            logger.info(f"Running again in {cf.run_every} seconds...")
-            sleep(cf.run_every)
-    else:
-        cf.get_configs()
-
-        cf.project_id = fetch_project_id(cf.project)
-
-        calendar_projects = []
-        for project in [
-            x.id
-            for x in cf.todoist_api.get_projects()
-            if x.parent_id == cf.project_id and x.comment_count >= 1
-        ]:
-            gcal_calendar_id = cf.todoist_api.get_comments(project_id=project)[
-                0
-            ].content
-
-            calendar_projects.append(
-                {"gcal_id": gcal_calendar_id, "todoist_id": project}
-            )
-
-        cf.calendars = calendar_projects
-
-        cf.refresh_calendar()
-
-        main()
+        if not killer.kill_now and configs.keep_running and configs.run_every:
+            logger.info(f"Running again in {configs.run_every} seconds...")
+            sleep(configs.run_every)
+        else:
+            logger.info(f"Finishing...")
+            break
