@@ -7,7 +7,8 @@ import calendar
 
 from helpers.db import DB
 
-from todoist_api_python.api import TodoistAPI
+# from todoist_api_python.api import TodoistAPI
+from todoist_api_override.api import TodoistAPIPatched as TodoistAPI
 from gcsa.google_calendar import GoogleCalendar
 from gcsa.event import Event
 import yaml
@@ -263,6 +264,10 @@ class Task:
                     type(self.date) is datetime.datetime
                     and task_on_todoist.due.datetime
                     and parse(task_on_todoist.due.datetime) != self.date
+                )
+                or (
+                    task_on_todoist.duration
+                    and task_on_todoist.duration.amount != self.duration
                 )
             ):
                 logger.info("- Updating task")
