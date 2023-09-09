@@ -21,7 +21,7 @@ Once an event is over, all tasks related to it will be automatically completed.
 ## Getting started
 
 You will need:
-1. Python 3.6+
+1. Python 3.10+
 1. A ``clone`` of this repo
 1. Run ``pip install -r requirements.txt``
 1. **.credentials** folder on the root of the script folder with your Google Calendar authentication files
