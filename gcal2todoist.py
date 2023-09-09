@@ -69,14 +69,14 @@ class Config:
         logger.setLevel(log_level)
 
         self.todoist_token = data.get("todoist_api_token")
-        self.mother_project_name = data.get("default_project")
-        self.label = data.get("label")
-        self.keep_running = data.get("keep_running")
-        self.run_every = data.get("run_every")
-        self.task_prefix = data.get("task_prefix", "* 🗓️ ")
-        self.task_suffix = data.get("task_suffix", "")
-        self.completed_label = data.get("completed_label")
-        self.days_to_fetch = data.get("days_to_fetch")
+        self.mother_project_name = data.get("default_project", "Events")
+        self.label = data.get("label", "Event")
+        self.keep_running = data.get("keep_running", True)
+        self.run_every = data.get("run_every", 300)
+        self.task_prefix = data.get("task_prefix", "* 🗓️ ```")
+        self.task_suffix = data.get("task_suffix", "```")
+        self.completed_label = data.get("completed_label", "Done")
+        self.days_to_fetch = data.get("days_to_fetch", "7")
 
         if not self.todoist_token:
             raise Exception("Todoist token not set.")
