@@ -86,6 +86,8 @@ class Config:
         self.fetch_mother_project_id()
 
     def fetch_mother_project_id(self) -> None:
+        """Fetch the default_project ID from Todoist and set it as an attribute"""
+
         logger.info("Fetching mother project-id")
         matching_projects = [
             project
@@ -105,6 +107,8 @@ class Config:
         self.mother_project_id = proj_id
 
     def get_calendars(self) -> tuple[str, str]:
+        """Search for Todoist projects with a calendar comment and yield them"""
+
         for todoist_project_id in [
             x.id
             for x in self.todoist.get_projects()
@@ -117,6 +121,8 @@ class Config:
             yield todoist_project_id, gcal_calendar_id
 
     def get_calendar_events(self, gcal_id: str) -> Iterator[Event]:
+        """Yield events from a calendar"""
+
         gc = GoogleCalendar(
             gcal_id,
             credentials_path=os.path.join(
@@ -338,7 +344,9 @@ def should_add_based_on_date(
         type(date) is datetime.datetime
         and date
         < datetime.datetime.now().replace(tzinfo=date.tzinfo)
-        - datetime.timedelta(minutes=duration)
+        - datetime.timedelta(
+            minutes=duration
+        )  # This keeps the event on Todoist until its proper end
     ):
         return False
 
@@ -422,6 +430,8 @@ def run() -> None:
     logger.info("Starting cleanup")
 
     for entry in db.get_unattached_events(run_id=run_id):
+        # Delete all DB entries that weren't updated with the current run_id because they've either become stale or
+        # unattached somehow
         if entry.get("todoist_id"):
             delete_task(task_id=entry.get("todoist_id"))
 
