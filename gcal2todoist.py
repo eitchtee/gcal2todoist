@@ -4,11 +4,15 @@ import datetime
 import os
 import logging
 import calendar
+from collections.abc import Iterator
 
 from helpers.db import DB
 
-# from todoist_api_python.api import TodoistAPI
-from todoist_api_override.api import TodoistAPIPatched as TodoistAPI
+# from todoist_api_python.api import TodoistAPI, Task
+from todoist_api_override.api import (
+    TodoistAPIPatched as TodoistAPI,
+    TaskPatched as Task,
+)
 from gcsa.google_calendar import GoogleCalendar
 from gcsa.event import Event
 import yaml
@@ -81,7 +85,7 @@ class Config:
 
         self.fetch_mother_project_id()
 
-    def fetch_mother_project_id(self):
+    def fetch_mother_project_id(self) -> None:
         logger.info("Fetching mother project-id")
         matching_projects = [
             project
@@ -100,7 +104,7 @@ class Config:
 
         self.mother_project_id = proj_id
 
-    def get_calendars(self):
+    def get_calendars(self) -> tuple[str, str]:
         for todoist_project_id in [
             x.id
             for x in self.todoist.get_projects()
@@ -112,7 +116,7 @@ class Config:
 
             yield todoist_project_id, gcal_calendar_id
 
-    def get_calendar_events(self, gcal_id):
+    def get_calendar_events(self, gcal_id: str) -> Iterator[Event]:
         gc = GoogleCalendar(
             gcal_id,
             credentials_path=os.path.join(
@@ -133,7 +137,7 @@ class Config:
             yield event
 
 
-class Task:
+class TodoistTask:
     def __init__(
         self,
         event: Event,
@@ -158,10 +162,10 @@ class Task:
 
         self.todoist_id = todoist_id
 
-    def generate_task_name(self):
+    def generate_task_name(self) -> str:
         return f"{configs.task_prefix}{self.event.summary.strip()}{configs.task_suffix}"
 
-    def generate_note(self):
+    def generate_note(self) -> str:
         note = []
         location = self.event.location
         description = self.event.description
@@ -201,7 +205,7 @@ class Task:
 
         return note
 
-    def generate_task_date(self):
+    def generate_task_date(self) -> dict:
         if type(self.date) is datetime.datetime:
             date = str(self.date.astimezone(datetime.timezone.utc))
             task_date = {"due_date": date}
@@ -217,7 +221,7 @@ class Task:
 
         return task_date
 
-    def add(self):
+    def add(self) -> None:
         task_date = self.generate_task_date()
 
         task = configs.todoist.add_task(
@@ -232,7 +236,7 @@ class Task:
             todoist_id=task.id, event_id=self.event.event_id, event_index=self.index
         )
 
-    def update(self, existing_tasks: list):
+    def update(self, existing_tasks: list[Task]) -> None:
         tasks_on_todoist = list(
             filter(
                 lambda obj: obj.id == self.todoist_id,
@@ -286,7 +290,7 @@ class Task:
             self.add()
 
 
-def generate_date_range(event: Event):
+def generate_date_range(event: Event) -> list[tuple]:
     date_range = []
 
     start = 0  # Range start
@@ -325,7 +329,9 @@ def generate_date_range(event: Event):
     return date_range
 
 
-def should_add_based_on_date(date, duration):
+def should_add_based_on_date(
+    date: datetime.date | datetime.datetime, duration: int
+) -> bool:
     duration = duration if duration else 0
 
     if (type(date) is datetime.date and date < datetime.datetime.today().date()) or (
@@ -339,7 +345,7 @@ def should_add_based_on_date(date, duration):
     return True
 
 
-def should_add_based_on_event(event: Event, gcal_id):
+def should_add_based_on_event(event: Event, gcal_id: str) -> bool:
     event_atendees = {
         atendee.email: atendee.response_status for atendee in event.attendees
     }
@@ -354,11 +360,11 @@ def should_add_based_on_event(event: Event, gcal_id):
     return True
 
 
-def delete_task(task_id):
+def delete_task(task_id: str) -> None:
     configs.todoist.delete_task(task_id=task_id)
 
 
-def run():
+def run() -> None:
     run_id = calendar.timegm(gmtime())
     logger.info(f"Run {run_id}")
 
@@ -388,7 +394,7 @@ def run():
 
                 if db_event and db_event.get("todoist_id"):
                     if not db_event.get("completed"):
-                        existing_task = Task(
+                        existing_task = TodoistTask(
                             event=event,
                             date=date,
                             duration=duration,
@@ -403,7 +409,7 @@ def run():
 
                 else:
                     logger.info("- Adding task")
-                    new_task = Task(
+                    new_task = TodoistTask(
                         event=event,
                         date=date,
                         duration=duration,
@@ -425,6 +431,7 @@ def run():
 if __name__ == "__main__":
     configs = Config()
     db = DB()
+
     killer = GracefulKiller()
     while not killer.kill_now:
         try:
