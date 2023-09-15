@@ -20,6 +20,13 @@ Once an event is over, all tasks related to it will be automatically completed.
 
 ## Getting started
 
+### docker-compose
+A ``docker-compose.yml`` example file is provided within this repo. Use it to get started faster.
+
+Make sure to setup your [credentials](#credentials) folder and [configs.yml](#configsyml)
+
+### Manual mode
+
 You will need:
 1. Python 3.10+
 1. A ``clone`` of this repo
