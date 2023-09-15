@@ -29,11 +29,11 @@ Make sure to setup your [credentials](#credentials) folder and [configs.yml](#co
 
 You will need:
 1. Python 3.10+
-1. A ``clone`` of this repo
-1. Run ``pip install -r requirements.txt``
-1. **.credentials** folder on the root of the script folder with your Google Calendar authentication files
-1. Configure **configs.yml**
-1. Run ``gcal2todoist.py``
+2. A ``clone`` of this repo
+3. Run ``pip install -r requirements.txt``
+4. **.credentials** folder on the root of the script folder with your Google Calendar authentication files
+5. Configure **configs.yml**
+6. Run ``gcal2todoist.py``
 
 ### .credentials
 Please refer to [Google Calendar Simple API's docs](https://google-calendar-simple-api.readthedocs.io/en/latest/getting_started.html#credentials) for a guide on how to create the ``.credentials`` folder
@@ -62,11 +62,11 @@ days_to_fetch: 7
 ### Syncing Calendars
 To sync a calendar
 1. Create a Todoist Project with the same name as the ``default_project`` set on ``configs.yml``.
-1. Add a new project as a child of the default project (one project for each calendar you want to sync)
+2. Add a new project as a child of the default project (one project for each calendar you want to sync)
 <img alt="Project Structure" title="Project Structure" src="./.github/images/project_structure.png" />
-1. In this project add a project comment with the ID of the Google Calendar you want to sync
+3. In this project add a project comment with the ID of the Google Calendar you want to sync
 <img alt="Project Comment" title="Project Comment" src="./.github/images/calendar_comment.png" />
-1. Run this script
+4. Run this script
 
 
 
