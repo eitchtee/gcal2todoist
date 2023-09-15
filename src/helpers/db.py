@@ -7,7 +7,7 @@ logger = logging.getLogger()
 
 class DB:
     def __init__(self):
-        self.db: TinyDB = TinyDB("events.json")
+        self.db: TinyDB = TinyDB("db/events.json")
 
     def insert_or_update_without_todoist(
         self,
