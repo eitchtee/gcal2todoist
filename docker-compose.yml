@@ -5,3 +5,16 @@ services:
     image: eitchtee/gcal2todoist
     restart: unless-stopped
     container_name: gcal2todoist
+#    environment:
+#      todoist_api_token: YOUR_TODOIST_TOKEN
+#      default_project: Events
+#      label: Event
+#      keep_running: false
+#      run_every: 600
+#      log_level: INFO
+#      task_prefix: "* 🗓️ ```"
+#      task_suffix: ```
+#      completed_label: Done
+#      days_to_fetch: 7
+    volumes:
+      - ./configs.yml:/usr/gcal2todoist/configs/configs.yml:ro
