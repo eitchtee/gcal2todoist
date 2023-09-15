@@ -30,4 +30,4 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   push: true
-                  tags: $/gcal2todoist:latest
+                  tags: eitchtee/gcal2todoist:latest
