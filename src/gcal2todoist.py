@@ -60,10 +60,12 @@ class Config:
         self.todoist_token = None
         self.todoist = None
 
-        configs_path = os.path.join(os.path.dirname(__file__), "configs.yml")
-
-        with open(configs_path, encoding="utf8") as file:
-            data = yaml.load(file, Loader=yaml.FullLoader)
+        configs_path = "configs/configs.yml"
+        if os.path.isfile(configs_path):
+            with open(configs_path, encoding="utf8") as file:
+                data = yaml.load(file, Loader=yaml.FullLoader)
+        else:
+            data = os.environ
 
         log_level = data.get("log_level", "INFO")
         logger.setLevel(log_level)
@@ -80,7 +82,7 @@ class Config:
 
         if not self.todoist_token:
             raise Exception("Todoist token not set.")
-
+        print(self.todoist_token)
         self.todoist = TodoistAPI(self.todoist_token)
 
         self.fetch_mother_project_id()

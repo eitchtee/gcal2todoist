@@ -1,0 +1,7 @@
+version: '3.1'
+
+services:
+  gcal2todoist:
+    image: eitchtee/gcal2todoist
+    restart: unless-stopped
+    container_name: gcal2todoist
