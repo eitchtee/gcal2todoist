@@ -27,3 +27,31 @@ def retry(tries: int = 15, retry_on: list[Exception] | None = None, delay: int =
         return wrapper
 
     return decorator
+
+
+def keep_running(delay: int, one_shot: bool = False):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if one_shot or not delay:
+                return func(*args, **kwargs)
+
+            seconds_slept = delay
+            while True:
+                if seconds_slept >= delay:
+                    try:
+                        func(*args, **kwargs)
+                    except Exception as e:
+                        logger.error(e, exc_info=True)
+                    finally:
+                        seconds_slept = 0
+                else:
+                    if seconds_slept == 0:
+                        logger.info(f"Running again in {delay} seconds...")
+
+                    sleep(1)
+                    seconds_slept += 1
+
+        return wrapper
+
+    return decorator
