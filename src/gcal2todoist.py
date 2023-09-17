@@ -82,7 +82,7 @@ class Config:
 
         if not self.todoist_token:
             raise Exception("Todoist token not set.")
-        print(self.todoist_token)
+
         self.todoist = TodoistAPI(self.todoist_token)
 
         self.fetch_mother_project_id()
