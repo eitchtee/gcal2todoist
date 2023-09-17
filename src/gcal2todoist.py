@@ -7,6 +7,7 @@ import calendar
 from collections.abc import Iterator
 
 from helpers.db import DB
+from helpers.decorators import retry
 
 # from todoist_api_python.api import TodoistAPI, Task
 from todoist_api_override.api import (
@@ -82,7 +83,7 @@ class Config:
 
         if not self.todoist_token:
             raise Exception("Todoist token not set.")
-        print(self.todoist_token)
+
         self.todoist = TodoistAPI(self.todoist_token)
 
         self.fetch_mother_project_id()
@@ -232,7 +233,7 @@ class TodoistTask:
     def add(self) -> None:
         task_date = self.generate_task_date()
 
-        task = configs.todoist.add_task(
+        task = add_task(
             content=self.task_name,
             description=self.note,
             project_id=self.todoist_project_id,
@@ -259,7 +260,7 @@ class TodoistTask:
                 and not task_on_todoist.is_completed
             ):
                 logger.info("- Forcefully completing labeled task")
-                configs.todoist.close_task(self.todoist_id)
+                close_task(task_id=self.todoist_id)
                 db.update_todoist_status(
                     completed=True, event_id=self.event.event_id, event_index=self.index
                 )
@@ -286,7 +287,7 @@ class TodoistTask:
 
                 task_date = self.generate_task_date()
 
-                configs.todoist.update_task(
+                update_task(
                     task_id=self.todoist_id,
                     content=self.task_name,
                     description=self.note,
@@ -370,8 +371,29 @@ def should_add_based_on_event(event: Event, gcal_id: str) -> bool:
     return True
 
 
+@retry()
 def delete_task(task_id: str) -> None:
     configs.todoist.delete_task(task_id=task_id)
+
+
+@retry()
+def get_tasks(project_id: str) -> list[Task]:
+    return configs.todoist.get_tasks(project_id=project_id)
+
+
+@retry()
+def add_task(*args, **kwargs) -> Task:
+    return configs.todoist.add_task(*args, **kwargs)
+
+
+@retry()
+def update_task(*args, **kwargs) -> None:
+    configs.todoist.update_task(*args, **kwargs)
+
+
+@retry()
+def close_task(task_id: str) -> None:
+    configs.todoist.close_task(task_id=task_id)
 
 
 def run() -> None:
@@ -379,7 +401,7 @@ def run() -> None:
     logger.info(f"Run {run_id}")
 
     for todoist_project_id, gcal_id in configs.get_calendars():
-        existing_tasks = configs.todoist.get_tasks(project_id=todoist_project_id)
+        existing_tasks = get_tasks(project_id=todoist_project_id)
 
         for event in configs.get_calendar_events(gcal_id=gcal_id):
             for date, duration, index in generate_date_range(event):
