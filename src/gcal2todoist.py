@@ -294,11 +294,11 @@ def run() -> None:
                 logger.info(f"Handling task '{event.summary}'[{index}]")
 
                 if not should_add_based_on_event(event=event, gcal_id=gcal_id):
-                    logger.info("- Skipping")
+                    logger.info("- Skipping due to event")
                     continue
 
                 if not should_add_based_on_date(date, duration=duration):
-                    logger.info("- Skipping")
+                    logger.info("- Skipping due to date")
                     continue
 
                 db.insert_or_update_without_todoist(
