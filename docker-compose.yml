@@ -9,3 +9,5 @@ services:
       - ./configs.yml:/usr/gcal2todoist/configs/configs.yml:ro
       - ./credentials/:/usr/gcal2todoist/.credentials/
       - ./db/:/usr/gcal2todoist/db/
+    environment:
+      - TZ=America/Sao_Paulo # Change to your own timezone
