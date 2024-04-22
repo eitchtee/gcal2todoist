@@ -82,7 +82,7 @@ class Config:
 
         self.mother_project_id = proj_id
 
-    def get_calendars(self) -> tuple[str, str]:
+    def get_calendars(self) -> tuple[str, list]:
         """Search for Todoist projects with a calendar comment and yield them"""
 
         for todoist_project_id in [
@@ -90,11 +90,13 @@ class Config:
             for x in self.todoist.get_projects()
             if x.parent_id == self.mother_project_id and x.comment_count >= 1
         ]:
-            gcal_calendar_id = self.todoist.get_comments(project_id=todoist_project_id)[
-                0
-            ].content
+            gcal_calendar_ids = []
+            comments = self.todoist.get_comments(project_id=todoist_project_id)
 
-            yield todoist_project_id, gcal_calendar_id
+            for comment in comments:
+                gcal_calendar_ids.append(comment.content)
+
+            yield todoist_project_id, gcal_calendar_ids
 
     def get_calendar_events(self, gcal_id: str) -> Iterator[Event]:
         """Yield events from a calendar"""

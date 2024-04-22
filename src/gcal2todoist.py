@@ -286,56 +286,57 @@ def run() -> None:
     run_id = calendar.timegm(gmtime())
     logger.info(f"Run {run_id}")
 
-    for todoist_project_id, gcal_id in configs.get_calendars():
+    for todoist_project_id, gcal_ids in configs.get_calendars():
         existing_tasks = get_tasks(project_id=todoist_project_id)
 
-        for event in configs.get_calendar_events(gcal_id=gcal_id):
-            for date, duration, index in generate_date_range(event):
-                logger.info(f"Handling task '{event.summary}'[{index}]")
+        for gcal_id in gcal_ids:
+            for event in configs.get_calendar_events(gcal_id=gcal_id):
+                for date, duration, index in generate_date_range(event):
+                    logger.info(f"Handling task '{event.summary}'[{index}]")
 
-                if not should_add_based_on_event(event=event, gcal_id=gcal_id):
-                    logger.info("- Skipping due to event")
-                    continue
+                    if not should_add_based_on_event(event=event, gcal_id=gcal_id):
+                        logger.info("- Skipping due to event")
+                        continue
 
-                if not should_add_based_on_date(date, duration=duration):
-                    logger.info("- Skipping due to date")
-                    continue
+                    if not should_add_based_on_date(date, duration=duration):
+                        logger.info("- Skipping due to date")
+                        continue
 
-                db.insert_or_update_without_todoist(
-                    event_id=event.event_id,
-                    due_date=date,
-                    event_index=index,
-                    run_id=run_id,
-                )
+                    db.insert_or_update_without_todoist(
+                        event_id=event.event_id,
+                        due_date=date,
+                        event_index=index,
+                        run_id=run_id,
+                    )
 
-                db_event = db.get_event(event_id=event.event_id, event_index=index)
+                    db_event = db.get_event(event_id=event.event_id, event_index=index)
 
-                if db_event and db_event.get("todoist_id"):
-                    if not db_event.get("completed"):
-                        existing_task = TodoistTask(
+                    if db_event and db_event.get("todoist_id"):
+                        if not db_event.get("completed"):
+                            existing_task = TodoistTask(
+                                event=event,
+                                date=date,
+                                duration=duration,
+                                index=index,
+                                gcal_id=gcal_id,
+                                todoist_project_id=todoist_project_id,
+                                todoist_id=db_event.get("todoist_id"),
+                            )
+                            existing_task.update(existing_tasks=existing_tasks)
+                        else:
+                            logger.info("- Task is considered done.")
+
+                    else:
+                        logger.info("- Adding task")
+                        new_task = TodoistTask(
                             event=event,
                             date=date,
                             duration=duration,
                             index=index,
                             gcal_id=gcal_id,
                             todoist_project_id=todoist_project_id,
-                            todoist_id=db_event.get("todoist_id"),
                         )
-                        existing_task.update(existing_tasks=existing_tasks)
-                    else:
-                        logger.info("- Task is considered done.")
-
-                else:
-                    logger.info("- Adding task")
-                    new_task = TodoistTask(
-                        event=event,
-                        date=date,
-                        duration=duration,
-                        index=index,
-                        gcal_id=gcal_id,
-                        todoist_project_id=todoist_project_id,
-                    )
-                    new_task.add()
+                        new_task.add()
 
     logger.info("Starting cleanup")
 
