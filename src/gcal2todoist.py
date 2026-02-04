@@ -7,10 +7,8 @@ from helpers.db import DB
 from helpers.decorators import retry, keep_running
 from classes.config import Config
 
-# from todoist_api_python.api import Task
-from todoist_api_override.api import (
-    TaskPatched as Task,
-)
+from todoist_api_python.models import Task
+from classes.config import flatten_paginated
 from gcsa.event import Event
 from dateutil.parser import parse
 
@@ -101,13 +99,11 @@ class TodoistTask:
 
     def generate_task_date(self) -> dict:
         if type(self.date) is datetime.datetime:
-            date = str(self.date.astimezone(datetime.timezone.utc))
-            task_date = {"due_date": date}
+            # Use due_datetime for datetime objects
+            task_date = {"due_datetime": self.date}
         else:
-            date = str(self.date)
-            task_date = {
-                "due_datetime": date,
-            }
+            # Use due_date for date-only objects
+            task_date = {"due_date": self.date}
 
         if self.duration:
             task_date["duration"] = self.duration
@@ -145,7 +141,7 @@ class TodoistTask:
                 and not task_on_todoist.is_completed
             ):
                 logger.info("- Forcefully completing labeled task")
-                close_task(task_id=self.todoist_id)
+                complete_task(task_id=self.todoist_id)
                 db.update_todoist_status(
                     completed=True, event_id=self.event.event_id, event_index=self.index
                 )
@@ -155,13 +151,16 @@ class TodoistTask:
                 or task_on_todoist.description != self.note
                 or (
                     type(self.date) is datetime.date
+                    and task_on_todoist.due
                     and task_on_todoist.due.date
                     and task_on_todoist.due.string != str(self.date)
                 )
                 or (
                     type(self.date) is datetime.datetime
-                    and task_on_todoist.due.datetime
-                    and parse(task_on_todoist.due.datetime) != self.date
+                    and task_on_todoist.due
+                    and task_on_todoist.due.date
+                    and "T" in task_on_todoist.due.date
+                    and parse(task_on_todoist.due.date) != self.date
                 )
                 or (
                     task_on_todoist.duration
@@ -198,7 +197,7 @@ def generate_date_range(event: Event) -> list[tuple]:
             start_date = event.start + datetime.timedelta(days=x)
         else:
             start_date = event.start + datetime.timedelta(days=x)
-            if type(event.start) == datetime.datetime:
+            if isinstance(event.start, datetime.datetime):
                 # if a multi-day event start and end times, set the start time to midnight on the second day forward
                 start_date = start_date.replace(hour=0, minute=0, second=0)
 
@@ -263,7 +262,7 @@ def delete_task(task_id: str) -> None:
 
 @retry()
 def get_tasks(project_id: str) -> list[Task]:
-    return configs.todoist.get_tasks(project_id=project_id)
+    return flatten_paginated(configs.todoist.get_tasks(project_id=project_id))
 
 
 @retry()
@@ -277,8 +276,8 @@ def update_task(*args, **kwargs) -> None:
 
 
 @retry()
-def close_task(task_id: str) -> None:
-    configs.todoist.close_task(task_id=task_id)
+def complete_task(task_id: str) -> None:
+    configs.todoist.complete_task(task_id=task_id)
 
 
 @keep_running(one_shot=not configs.keep_running, delay=configs.run_every)

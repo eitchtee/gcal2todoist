@@ -6,14 +6,19 @@ from typing import Iterator
 import yaml
 from gcsa.event import Event
 
-# from todoist_api_python.api import TodoistAPI
-from todoist_api_override.api import (
-    TodoistAPIPatched as TodoistAPI,
-)
+from todoist_api_python.api import TodoistAPI
 from gcsa.google_calendar import GoogleCalendar
 
 
 logger = logging.getLogger()
+
+
+def flatten_paginated(iterator) -> list:
+    """Flatten a paginated iterator into a single list."""
+    result = []
+    for page in iterator:
+        result.extend(page)
+    return result
 
 
 class Config:
@@ -65,9 +70,10 @@ class Config:
         """Fetch the default_project ID from Todoist and set it as an attribute"""
 
         logger.info("Fetching mother project-id")
+        all_projects = flatten_paginated(self.todoist.get_projects())
         matching_projects = [
             project
-            for project in self.todoist.get_projects()
+            for project in all_projects
             if project.name == self.mother_project_name
         ]
         if len(matching_projects) >= 1:
@@ -85,13 +91,16 @@ class Config:
     def get_calendars(self) -> tuple[str, list]:
         """Search for Todoist projects with a calendar comment and yield them"""
 
+        all_projects = flatten_paginated(self.todoist.get_projects())
         for todoist_project_id in [
             x.id
-            for x in self.todoist.get_projects()
+            for x in all_projects
             if x.parent_id == self.mother_project_id and x.comment_count >= 1
         ]:
             gcal_calendar_ids = []
-            comments = self.todoist.get_comments(project_id=todoist_project_id)
+            comments = flatten_paginated(
+                self.todoist.get_comments(project_id=todoist_project_id)
+            )
 
             for comment in comments:
                 gcal_calendar_ids.append(comment.content)
