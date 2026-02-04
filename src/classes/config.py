@@ -92,20 +92,23 @@ class Config:
         """Search for Todoist projects with a calendar comment and yield them"""
 
         all_projects = flatten_paginated(self.todoist.get_projects())
-        for todoist_project_id in [
-            x.id
-            for x in all_projects
-            if x.parent_id == self.mother_project_id and x.comment_count >= 1
-        ]:
+        # Filter to child projects of mother project
+        child_projects = [
+            x for x in all_projects if x.parent_id == self.mother_project_id
+        ]
+
+        for project in child_projects:
             gcal_calendar_ids = []
             comments = flatten_paginated(
-                self.todoist.get_comments(project_id=todoist_project_id)
+                self.todoist.get_comments(project_id=project.id)
             )
 
             for comment in comments:
                 gcal_calendar_ids.append(comment.content)
 
-            yield todoist_project_id, gcal_calendar_ids
+            # Only yield projects that have at least one comment (calendar ID)
+            if gcal_calendar_ids:
+                yield project.id, gcal_calendar_ids
 
     def get_calendar_events(self, gcal_id: str) -> Iterator[Event]:
         """Yield events from a calendar"""
