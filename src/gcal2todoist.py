@@ -259,6 +259,16 @@ def should_add_based_on_event(event: Event, gcal_id: str) -> bool:
     return True
 
 
+def should_add_based_on_event_type(event: Event, ignored_event_types: list) -> bool:
+    """Check if the event type is allowed (not in the ignored list)."""
+    event_type = event.other.get("eventType", "default")
+
+    if event_type in ignored_event_types:
+        return False
+
+    return True
+
+
 @retry()
 def delete_task(task_id: str) -> None:
     configs.todoist.delete_task(task_id=task_id)
@@ -289,16 +299,24 @@ def run() -> None:
     run_id = calendar.timegm(gmtime())
     logger.info(f"Run {run_id}")
 
-    for todoist_project_id, gcal_ids in configs.get_calendars():
+    for todoist_project_id, calendars in configs.get_calendars():
         existing_tasks = get_tasks(project_id=todoist_project_id)
 
-        for gcal_id in gcal_ids:
+        for gcal_id, ignored_event_types in calendars:
             for event in configs.get_calendar_events(gcal_id=gcal_id):
                 for date, duration, index in generate_date_range(event):
                     logger.info(f"Handling task '{event.summary}'[{index}]")
 
                     if not should_add_based_on_event(event=event, gcal_id=gcal_id):
                         logger.info("- Skipping due to event")
+                        continue
+
+                    if not should_add_based_on_event_type(
+                        event=event, ignored_event_types=ignored_event_types
+                    ):
+                        logger.info(
+                            f"- Skipping due to event type: {event.other.get('eventType', 'default')}"
+                        )
                         continue
 
                     if not should_add_based_on_date(date, duration=duration):

@@ -88,8 +88,15 @@ class Config:
 
         self.mother_project_id = proj_id
 
-    def get_calendars(self) -> tuple[str, list]:
-        """Search for Todoist projects with a calendar comment and yield them"""
+    def get_calendars(self) -> tuple[str, list[tuple[str, list]]]:
+        """Search for Todoist projects with a calendar comment and yield them.
+
+        Comments can be:
+        - Calendar ID only (e.g., 'user@gmail.com')
+        - Calendar ID with ignored event types (e.g., 'user@gmail.com|ignore:outOfOffice,workingLocation')
+
+        Returns tuples of (project_id, calendars) where calendars is a list of (calendar_id, ignored_event_types).
+        """
 
         all_projects = flatten_paginated(self.todoist.get_projects())
         # Filter to child projects of mother project
@@ -98,17 +105,35 @@ class Config:
         ]
 
         for project in child_projects:
-            gcal_calendar_ids = []
+            calendars = []  # List of (calendar_id, ignored_event_types)
             comments = flatten_paginated(
                 self.todoist.get_comments(project_id=project.id)
             )
 
             for comment in comments:
-                gcal_calendar_ids.append(comment.content)
+                content = comment.content.strip()
+                ignored_event_types = []
 
-            # Only yield projects that have at least one comment (calendar ID)
-            if gcal_calendar_ids:
-                yield project.id, gcal_calendar_ids
+                # Check for pipe-delimited ignore rules
+                if "|" in content:
+                    parts = content.split("|", 1)
+                    calendar_id = parts[0].strip()
+                    ignore_part = parts[1].strip()
+
+                    if ignore_part.lower().startswith("ignore:"):
+                        types_str = ignore_part[7:].strip()  # Remove 'ignore:' prefix
+                        ignored_event_types = [
+                            t.strip() for t in types_str.split(",") if t.strip()
+                        ]
+                else:
+                    calendar_id = content
+
+                if calendar_id:
+                    calendars.append((calendar_id, ignored_event_types))
+
+            # Only yield projects that have at least one calendar
+            if calendars:
+                yield project.id, calendars
 
     def get_calendar_events(self, gcal_id: str) -> Iterator[Event]:
         """Yield events from a calendar"""

@@ -68,6 +68,31 @@ To sync a calendar
 <img alt="Project Comment" title="Project Comment" src="./.github/images/calendar_comment.png" />
 4. Run this script
 
+### Filtering Event Types
+You can filter out specific Google Calendar event types (like "Out of Office" or "Working Location") on a per-calendar basis.
+
+To ignore event types for a specific calendar, use the pipe-delimited format in your project comment:
+```
+calendar-id@gmail.com|ignore:outOfOffice,workingLocation
+```
+
+**Available event types:**
+| Event Type | Description |
+|------------|-------------|
+| `default` | Regular calendar events |
+| `outOfOffice` | Out of office events |
+| `workingLocation` | Working location events |
+| `focusTime` | Focus time events |
+| `birthday` | Birthday events |
+| `fromGmail` | Events created from Gmail |
+
+**Example setup with multiple calendars:**
+```
+Comment 1: work@company.com|ignore:outOfOffice,workingLocation,focusTime
+Comment 2: personal@gmail.com
+```
+In this example, the work calendar will skip out of office, working location, and focus time events, while the personal calendar will sync all event types.
+
 
 
 ## Contributing
