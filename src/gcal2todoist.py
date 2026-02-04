@@ -10,7 +10,6 @@ from classes.config import Config
 from todoist_api_python.models import Task
 from classes.config import flatten_paginated
 from gcsa.event import Event
-from dateutil.parser import parse
 
 from markdownify import markdownify
 
@@ -150,17 +149,23 @@ class TodoistTask:
                 task_on_todoist.content != self.task_name
                 or task_on_todoist.description != self.note
                 or (
-                    type(self.date) is datetime.date
+                    isinstance(self.date, datetime.date)
+                    and not isinstance(self.date, datetime.datetime)
                     and task_on_todoist.due
                     and task_on_todoist.due.date
-                    and task_on_todoist.due.string != str(self.date)
+                    and (
+                        task_on_todoist.due.date.date()
+                        if isinstance(task_on_todoist.due.date, datetime.datetime)
+                        else task_on_todoist.due.date
+                    )
+                    != self.date
                 )
                 or (
-                    type(self.date) is datetime.datetime
+                    isinstance(self.date, datetime.datetime)
                     and task_on_todoist.due
                     and task_on_todoist.due.date
-                    and "T" in task_on_todoist.due.date
-                    and parse(task_on_todoist.due.date) != self.date
+                    and isinstance(task_on_todoist.due.date, datetime.datetime)
+                    and task_on_todoist.due.date != self.date
                 )
                 or (
                     task_on_todoist.duration
