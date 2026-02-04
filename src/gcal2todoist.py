@@ -180,7 +180,6 @@ class TodoistTask:
                     task_id=self.todoist_id,
                     content=self.task_name,
                     description=self.note,
-                    project_id=self.todoist_project_id,
                     **task_date,
                 )
 
