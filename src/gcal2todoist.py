@@ -54,7 +54,8 @@ class TodoistTask:
         self.todoist_id = todoist_id
 
     def generate_task_name(self) -> str:
-        return f"{configs.task_prefix}{self.event.summary.strip()}{configs.task_suffix}"
+        summary = self.event.summary.strip() if self.event.summary else "(No Title)"
+        return f"{configs.task_prefix}{summary}{configs.task_suffix}"
 
     def generate_note(self) -> str:
         note = []
